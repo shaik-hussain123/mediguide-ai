@@ -1,0 +1,37 @@
+services:
+  web:
+    build: .
+    environment:
+      DATABASE_URL: postgresql+psycopg://mediguide:${DB_PASSWORD:?Set DB_PASSWORD in .env}@db:5432/mediguide
+      SECRET_KEY: ${SECRET_KEY:?Set SECRET_KEY in .env}
+      UPLOAD_DIR: /srv/mediguide/private_uploads
+      ENVIRONMENT: production
+      PUBLIC_ORIGIN: ${PUBLIC_ORIGIN:?Set PUBLIC_ORIGIN to the public HTTPS origin}
+    depends_on:
+      db: { condition: service_healthy }
+    volumes:
+      - uploads:/srv/mediguide/private_uploads
+    restart: unless-stopped
+  proxy:
+    image: nginx:1.27-alpine
+    ports: ["80:80"]
+    volumes:
+      - ./nginx.conf:/etc/nginx/conf.d/default.conf:ro
+    depends_on: [web]
+    restart: unless-stopped
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: mediguide
+      POSTGRES_USER: mediguide
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set DB_PASSWORD in .env}
+    volumes: ["pgdata:/var/lib/postgresql/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U mediguide -d mediguide"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    restart: unless-stopped
+volumes:
+  pgdata:
+  uploads:
