@@ -1,0 +1,129 @@
+import json, subprocess, time, os, hmac, hashlib, struct, base64, urllib.request, tempfile, datetime, re
+from playwright.sync_api import sync_playwright
+
+tmp = tempfile.mkdtemp(); dbf = os.path.join(tmp, 't.db')
+env = {**os.environ, 'PORT':'5601','DATA_DIR':tmp,'DB_FILE':dbf,'GEMINI_ENDPOINT':'http://127.0.0.1:5602/v1beta/models'}
+procs = [subprocess.Popen(['node','fakegem.mjs'], cwd='/tmp/e2e'), subprocess.Popen(['node','--no-warnings','server/index.js'], cwd='/home/claude/mediguide-ai', env=env, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)]
+time.sleep(1.5)
+BASE='http://localhost:5601'
+def post(path, body):
+    req=urllib.request.Request(BASE+path, json.dumps(body).encode(), {'Content-Type':'application/json'}); return json.load(urllib.request.urlopen(req))
+def totp(secret):
+    s=secret.replace(' ','').upper(); s+='='*((8-len(s)%8)%8); key=base64.b32decode(s)
+    c=struct.pack('>Q', int(time.time())//30); h=hmac.new(key,c,hashlib.sha1).digest(); o=h[19]&15
+    return str((struct.unpack('>I',h[o:o+4])[0]&0x7fffffff)%10**6).zfill(6)
+
+post('/api/auth/register', {'name':'Site Admin','email':'admin@test.com','password':'password123'})
+subprocess.run(['node','--no-warnings','server/cli.js','make-admin','admin@test.com'], cwd='/home/claude/mediguide-ai', env=env, check=True, stdout=subprocess.DEVNULL)
+
+MOCKS = """
+window.__spoken=[]; window.__listens=0;
+Object.defineProperty(window,'speechSynthesis',{configurable:true,value:{speak(u){window.__spoken.push(u.text+'|'+u.lang); setTimeout(()=>u.onend&&u.onend(),5)},cancel(){},getVoices(){return []}}});
+window.SpeechSynthesisUtterance=function(t){this.text=t};
+window.SpeechRecognition=window.webkitSpeechRecognition=class{start(){window.__listens++; setTimeout(()=>{this.onresult&&this.onresult({results:[[{transcript:'what is dolo used for'}]]}); this.onend&&this.onend()},30)} stop(){}};
+"""
+errors=[]; r={}
+def wait_text(pg, sel, text, timeout=10):
+    t=time.time()
+    while time.time()-t<timeout:
+        if text in pg.inner_text(sel): return True
+        time.sleep(0.2)
+    raise AssertionError('text not found: '+text+' | CHAT: '+pg.inner_text(sel)[-400:])
+def login_ui(page, email, pw, totp_code=None):
+    page.click('#loginBtn'); page.click('#tabLogin'); page.fill('#loginEmail',email); page.fill('#loginPassword',pw)
+    if totp_code: page.fill('#loginTOTP',totp_code)
+    page.click('#doLoginBtn')
+
+with sync_playwright() as p:
+    b=p.chromium.launch(); ctx=b.new_context(viewport={'width':1280,'height':900}, service_workers='block'); ctx.add_init_script(MOCKS)
+    page=ctx.new_page()
+    page.on('pageerror', lambda e: errors.append('PAGEERR '+str(e)))
+    page.on('console', lambda m: errors.append('CONSOLE '+m.text) if m.type=='error' and 'Failed to load resource' not in m.text and 'ERR_' not in m.text and 'status of 40' not in m.text else None)
+    browser_reqs=[]; page.on('request', lambda q: browser_reqs.append(q.url))
+    page.route('**/cdnjs.cloudflare.com/**', lambda x: x.abort()); page.route('**/fonts.g*/**', lambda x: x.abort())
+    page.goto(BASE); page.wait_for_selector('.med-card'); page.wait_for_timeout(700); page.click('#consentAccept')
+
+    print('STEP: languages', flush=True)
+    r['en_nav']=page.inner_text('#loginBtn').strip()
+    for code,expect in [('hi','लॉगिन'),('ta','உள்நுழை'),('bn','লগইন')]:
+        page.select_option('#langSelect', code); page.wait_for_timeout(150)
+        r[f'{code}_nav']=expect in page.inner_text('#loginBtn'); r[f'{code}_card']=page.inner_text('.med-card .uses h4').strip(); r[f'{code}_htmllang']=page.evaluate('document.documentElement.lang')
+    r['hi_placeholder']=page.get_attribute('#medicineSearch','placeholder')[:20]
+    r['hi_found']=page.inner_text('.result-head')
+    page.select_option('#langSelect','hi'); page.reload(); page.wait_for_selector('.med-card'); r['lang_persisted']=page.evaluate('document.documentElement.lang')
+    page.select_option('#langSelect','en')
+
+    print('STEP: register in server mode + ABHA + session restore', flush=True)
+    page.click('#loginBtn'); page.click('#tabRegister'); page.fill('#regName','Asha Kumar'); page.fill('#regEmail','asha@test.com'); page.fill('#regPassword','password123'); page.check('#consentCheck'); page.click('#doRegisterBtn'); page.wait_for_selector('#profileBtn:visible')
+    page.click('#profileBtn'); page.fill('#profileAge','68'); page.fill('#profileAbhaNumber','123'); page.click('#saveProfileBtn'); page.wait_for_timeout(300)
+    r['abha_bad_toast']='14 digits' in page.inner_text('#toastContainer')
+    page.fill('#profileAbhaNumber','12 3456 7890 1234'); page.fill('#profileAbhaAddress','Asha.K@abdm'); page.click('#saveProfileBtn'); page.wait_for_timeout(400)
+    page.keyboard.press('Escape'); page.reload(); page.wait_for_selector('.med-card'); page.wait_for_selector('#profileBtn:visible', timeout=6000)
+    r['session_restored']=True; page.click('#profileBtn'); r['abha_saved']=page.input_value('#profileAbhaNumber')+' '+page.input_value('#profileAbhaAddress'); r['senior_default']=page.get_attribute('.age-tab.active','data-age')
+    # token hygiene
+    r['no_token_in_storage']=page.evaluate("Object.keys(localStorage).every(k=>!/eyJ/.test(localStorage.getItem(k)||''))"); r['cookie_not_readable']='mg_rt' not in page.evaluate('document.cookie')
+
+    print('STEP: 2FA enrolment through the UI', flush=True)
+    page.click('#twofaSetupBtn'); page.wait_for_selector('#twofaBox:visible'); secret=page.inner_text('#twofaSecret'); page.fill('#twofaCode', totp(secret)); page.click('#twofaEnableBtn'); page.wait_for_timeout(500)
+    r['twofa_on']=page.inner_text('#twofaStatus'); page.click('#logoutBtn'); page.wait_for_timeout(300)
+    login_ui(page,'asha@test.com','password123'); page.wait_for_timeout(500); r['twofa_demanded']='6-digit' in page.inner_text('#toastContainer')
+    page.fill('#loginTOTP', totp(secret)); page.click('#doLoginBtn'); page.wait_for_selector('#profileBtn:visible', timeout=6000); r['twofa_login_ok']=True
+
+    print('STEP: AI not set up yet, then admin sets the key (server-side)', flush=True)
+    page.fill('#chatInput','hi'); page.click('#sendChatBtn'); page.wait_for_timeout(400); r['ai_unset_msg']=page.inner_text('.msg.bot.error .msg-text')[:50]
+    page.click('#profileBtn'); page.click('#logoutBtn'); page.wait_for_timeout(300)
+    login_ui(page,'admin@test.com','password123'); page.wait_for_selector('#adminPanelBtn:visible', timeout=6000)
+    page.click('#adminPanelBtn'); page.wait_for_selector('.stat'); r['admin_stats']=page.locator('.stat').count(); r['admin_users_rows']=page.locator('#adminUsersContent tbody tr').count()
+    page.click('[data-panel=adminPanelKeys]'); r['key_note']=page.inner_text('#adminKeyNote')[:40]
+    page.fill('#adminApiKey','AIzaSyDUMMYKEY_1234567890abcdefghij'); page.click('#adminSaveKey'); page.wait_for_timeout(600); r['key_status']=page.inner_text('#adminKeyStatus').strip()
+    page.click('[data-panel=adminPanelMeds]'); page.fill('#uses-1','Fever, Headache, Migraine'); page.click('[data-save-uses="1"]'); page.wait_for_timeout(500); page.keyboard.press('Escape')
+    r['card_has_migraine']='Migraine' in page.inner_text('.uses')
+    page.click('#adminPanelBtn'); page.click('[data-panel=adminPanelAudit]') if page.locator('[data-panel=adminPanelAudit]').count() else None; page.keyboard.press('Escape')
+
+    print('STEP: chat via server proxy; voice mode', flush=True)
+    page.click('#voiceModeBtn'); page.click('#micBtn'); wait_text(page,'#chatMessages','Fake answer from MediChat'); page.wait_for_timeout(300)
+    r['voice_autosend_and_spoke']=page.evaluate('window.__spoken.length')>0 and page.evaluate('window.__listens')==1
+    r['spoken_sample']=page.evaluate('window.__spoken[0]')
+    calls=json.load(urllib.request.urlopen('http://127.0.0.1:5602/__calls'))
+    r['gemini_key_from_server']=calls[-1]['key']; r['browser_never_called_google']=not any('generativelanguage' in u for u in browser_reqs); r['proxy_used']=any('/api/ai/generate' in u for u in browser_reqs)
+    r['lang_in_system']='Reply in English' in calls[-1]['sys']
+    page.select_option('#langSelect','ta'); page.fill('#chatInput','hello'); page.click('#sendChatBtn'); page.wait_for_timeout(800)
+    r['tamil_in_system']='Reply in Tamil' in json.load(urllib.request.urlopen('http://127.0.0.1:5602/__calls'))[-1]['sys']
+    page.select_option('#langSelect','en')
+    page.click('[data-listen="1"]'); r['listen_card']=page.evaluate('window.__spoken.at(-1)').endswith('en-IN')
+    page.click('#voiceModeBtn')
+
+    print('STEP: Doctor booking + teleconsultation', flush=True)
+    page.click('#tabCare'); page.wait_for_selector('.doctor-card'); r['doctors']=page.locator('.doctor-card').count()
+    page.click('.doctor-card >> nth=0 >> [data-book]'); d=(datetime.datetime.utcnow()+datetime.timedelta(hours=5.5, days=2))
+    while d.weekday()==6: d+=datetime.timedelta(days=1)
+    page.fill('#bookDate', d.strftime('%Y-%m-%d')); page.wait_for_selector('.slot-btn'); r['slots']=page.locator('.slot-btn').count()
+    page.click('.slot-btn >> nth=0'); page.fill('#bookReason','Fever'); page.click('#bookConfirm'); page.wait_for_selector('.appt-item', timeout=6000)
+    r['appt_listed']=page.locator('.appt-item').count(); r['join_locked']=page.locator('.appt-item button[disabled]').count()==1
+    page.once('dialog', lambda dlg: dlg.accept()); page.click('[data-cancel]'); page.wait_for_selector('.appt-item.cancelled', timeout=6000); r['cancelled']=True
+
+    print('STEP: Prescription OCR (structured) -> reminder', flush=True)
+    page.click('#tabPrescription'); page.set_input_files('#rxFileInput', {'name':'rx.png','mimeType':'image/png','buffer':bytes.fromhex('89504e470d0a1a0a')+b'0'*40}); page.click('#rxUploadBtn'); page.wait_for_selector('.rx-table', timeout=8000)
+    r['ocr_rows']=page.locator('.rx-table tbody tr').count(); r['ocr_first']=page.inner_text('.rx-table tbody tr >> nth=0 >> th').split('\n')[0]
+    page.click('[data-remind-row="0"]'); page.wait_for_timeout(200)
+    r['remind_prefill']=[page.input_value('#remMedicine'), page.input_value('#remDays'), page.inner_text('#remTimesList').replace('\n',' ').strip()]
+
+    print('STEP: reminder saved to server and fires', flush=True)
+    now=datetime.datetime.now()
+    if now.second>45: time.sleep(16); now=datetime.datetime.now()
+    page.evaluate("document.querySelectorAll('#remTimesList .chip-x').forEach(b=>b.click())")
+    page.fill('#remTimeInput', now.strftime('%H:%M')); page.click('#remAddTimeBtn'); page.click('#remSaveBtn'); page.wait_for_selector('.rem-item', timeout=6000)
+    page.wait_for_selector('.toast-warn', timeout=40000); r['reminder_fired']=page.inner_text('.toast-warn')[:40]
+    page.reload(); page.wait_for_selector('.med-card'); page.click('#tabReminders'); page.wait_for_selector('.rem-item', timeout=6000); r['reminder_persisted_server']=page.locator('.rem-item').count()
+
+    print('STEP: site-wide edit visible to a fresh guest', flush=True)
+    g=b.new_context(service_workers='block').new_page(); g.route('**/cdnjs.cloudflare.com/**', lambda x: x.abort()); g.route('**/fonts.g*/**', lambda x: x.abort()); g.goto(BASE); g.wait_for_selector('.med-card'); r['guest_sees_admin_edit']='Migraine' in g.inner_text('.uses')
+    g.click('#adminPanelBtn', force=True) if g.is_visible('#adminPanelBtn') else None; r['guest_no_admin_btn']=not g.is_visible('#adminPanelBtn')
+    # guest reminder works locally, no login
+    g.click('#tabReminders'); g.fill('#remMedicine','Pan 40'); g.fill('#remTimeInput','08:00'); g.click('#remAddTimeBtn'); g.click('#remSaveBtn'); g.wait_for_selector('.rem-item'); g.reload(); g.click('#tabReminders'); r['guest_reminder_local']=g.locator('.rem-item').count()
+    g.screenshot(path='/tmp/guest.png')
+    page.set_viewport_size({'width':390,'height':800}); page.click('#tabMedicine'); page.wait_for_timeout(200); r['mobile_no_hscroll']=page.evaluate('document.documentElement.scrollWidth<=document.documentElement.clientWidth'); page.screenshot(path='/tmp/server_mobile.png')
+    b.close()
+for k,v in r.items(): print(f'{k}: {v}')
+print('ERRORS:', errors or 'none')
+for pr in procs: pr.terminate()

@@ -1,0 +1,11 @@
+{
+  "name": "MediGuide AI · Smart Medicine Assistant",
+  "short_name": "MediGuide",
+  "description": "Elderly-friendly, CDSCO-approved medicine information for India with a Gemini-powered assistant.",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f1f6f9",
+  "theme_color": "#0a6c8f",
+  "icons": [{ "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+}

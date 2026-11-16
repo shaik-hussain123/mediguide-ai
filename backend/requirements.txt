@@ -1,0 +1,10 @@
+fastapi
+uvicorn
+httpx
+python-multipart
+aiofiles
+pillow
+motor
+pyjwt
+passlib[bcrypt]
+python-dotenv

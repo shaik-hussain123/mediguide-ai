@@ -1,0 +1,57 @@
+/* MediGuide AI: modals, forms, settings */
+.modal-overlay { position: fixed; inset: 0; z-index: 1500; display: grid; place-items: center; padding: 16px; background: rgba(8, 25, 35, .6); overflow-y: auto; }
+.modal { width: 100%; max-height: calc(100vh - 32px); overflow-y: auto; background: var(--card); color: var(--text); border: 1px solid var(--border); border-radius: 18px; box-shadow: 0 20px 60px rgba(0, 0, 0, .35); }
+.modal-header { position: sticky; top: 0; z-index: 2; display: flex; align-items: center; justify-content: space-between; gap: 12px; padding: 14px 18px; background: var(--card); border-bottom: 1px solid var(--border); }
+.modal-title { display: flex; align-items: center; gap: 10px; font-size: 1.2rem; font-weight: 800; } .modal-title i { color: var(--primary); }
+.modal-close { min-width: var(--tap); min-height: var(--tap); border: 0; border-radius: 50%; background: transparent; }
+.modal-close:hover { background: var(--primary-soft); }
+.modal-body { padding: 18px; }
+.modal-actions { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+
+.form-group { display: flex; flex-direction: column; gap: 6px; margin-bottom: 14px; }
+.form-group label { font-weight: 700; font-size: .92rem; } .form-group label i { color: var(--primary); margin-right: 4px; }
+.form-group input, .form-group select { min-height: var(--tap); padding: 0 12px; border: 2px solid var(--border); border-radius: 12px; background: var(--card); width: 100%; }
+.form-group input:focus, .form-group select:focus { border-color: var(--primary); }
+.form-row-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 12px; }
+@media (max-width: 480px) { .form-row-2 { grid-template-columns: 1fr; } }
+.form-check { display: flex; align-items: flex-start; gap: 10px; margin: 12px 0; }
+.form-check input { width: 24px; height: 24px; flex: none; margin-top: 2px; accent-color: var(--primary); }
+.optional-badge { font-size: .7rem; font-weight: 600; color: var(--muted); background: var(--primary-soft); padding: 1px 8px; border-radius: 999px; }
+.auth-note, .settings-note { font-size: .82rem; color: var(--muted); margin: 10px 0 0; }
+.auth-tabs { display: flex; gap: 6px; border-bottom: 2px solid var(--border); }
+.auth-tab { flex: 1; min-height: var(--tap); border: 0; background: transparent; border-bottom: 4px solid transparent; margin-bottom: -2px; font-weight: 700; color: var(--muted); }
+.auth-tab.active { color: var(--primary-dark); border-bottom-color: var(--primary); }
+.auth-panel { padding-top: 16px; }
+
+.profile-avatar-row { display: flex; align-items: center; gap: 14px; margin-bottom: 16px; }
+.profile-avatar { width: 64px; height: 64px; border-radius: 50%; display: grid; place-items: center; background: var(--primary); color: var(--on-primary); font-size: 1.7rem; font-weight: 800; flex: none; }
+.profile-name { font-size: 1.2rem; font-weight: 800; } .profile-email { color: var(--muted); } .profile-badges { display: flex; gap: 6px; margin-top: 4px; flex-wrap: wrap; }
+.profile-section, .settings-section { margin-bottom: 18px; padding-bottom: 14px; border-bottom: 1px solid var(--border); } .settings-section:last-child { border-bottom: 0; }
+.profile-section-title, .settings-section-title { font-weight: 800; margin-bottom: 10px; } .profile-section-title i, .settings-section-title i { color: var(--primary); margin-right: 6px; }
+.profile-info-row { display: flex; justify-content: space-between; gap: 12px; padding: 6px 0; font-size: .92rem; } .profile-info-row span:first-child { color: var(--muted); }
+.api-key-row { display: flex; gap: 6px; } .api-key-row input { flex: 1; }
+.toggle-row { display: flex; align-items: center; justify-content: space-between; gap: 12px; min-height: var(--tap); }
+.toggle-switch { position: relative; display: inline-block; width: 56px; height: 32px; flex: none; }
+.toggle-switch input { position: absolute; opacity: 0; width: 100%; height: 100%; margin: 0; cursor: pointer; z-index: 1; }
+.slider { position: absolute; inset: 0; border-radius: 999px; background: #6b7a85; transition: .2s; border: 2px solid transparent; }
+.slider::before { content: ''; position: absolute; left: 3px; top: 3px; width: 22px; height: 22px; border-radius: 50%; background: #fff; transition: .2s; }
+.toggle-switch input:checked + .slider { background: var(--primary); } .toggle-switch input:checked + .slider::before { transform: translateX(24px); }
+.toggle-switch input:focus-visible + .slider { outline: 3px solid var(--focus); outline-offset: 2px; }
+html.high-contrast .slider { border-color: #fff; }
+
+.about-hero { text-align: center; margin-bottom: 16px; } .about-logo { font-size: 1.8rem; font-weight: 800; color: var(--primary-dark); } .about-logo i { color: var(--bad); } .about-tagline { color: var(--muted); }
+.about-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 12px; margin-bottom: 16px; }
+.about-card { padding: 14px; border-radius: 12px; background: var(--primary-soft); } .about-card i { color: var(--primary); font-size: 1.4rem; } .about-card h3 { font-size: 1rem; margin: 6px 0 4px; } .about-card p { margin: 0; font-size: .88rem; color: var(--muted); }
+.about-disclaimer-box { display: flex; gap: 12px; padding: 14px; border-radius: 12px; background: var(--warn-soft); border: 1.5px solid var(--warn); } .about-disclaimer-box > i { color: var(--warn); font-size: 1.4rem; } .about-disclaimer-box p { margin: 4px 0 0; }
+.about-links { display: flex; flex-wrap: wrap; gap: 10px; margin-top: 16px; }
+.about-link { display: inline-flex; align-items: center; gap: 6px; min-height: var(--tap); padding: 0 14px; border: 2px solid var(--primary); border-radius: 12px; text-decoration: none; font-weight: 700; }
+
+.consent-list { list-style: none; margin: 14px 0; padding: 0; display: grid; gap: 10px; }
+.consent-list li { display: flex; gap: 10px; align-items: flex-start; } .consent-list i { color: var(--primary); margin-top: 4px; }
+.company-facts { display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 10px; margin: 0 0 16px; }
+.company-facts > div { padding: 10px 12px; border-radius: 10px; background: var(--primary-soft); } .company-facts dt { font-size: .78rem; font-weight: 700; color: var(--muted); } .company-facts dd { margin: 2px 0 0; font-weight: 700; }
+.company-meds-title { margin: 0 0 8px; font-size: 1rem; }
+@media (max-width: 480px) { .modal-overlay { padding: 0; align-items: end; } .modal { border-radius: 18px 18px 0 0; max-height: 94vh; } }
+
+.auth-tabs { overflow-x: auto; }
+.auth-tab { white-space: nowrap; padding: 0 12px; }

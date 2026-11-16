@@ -1,0 +1,935 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="description"
+        content="MediGuide AI – India's trusted CDSCO-approved smart medicine assistant powered by Gemini AI." />
+    <!-- Content-Security-Policy: scripts only from this origin; Gemini API + CDN fonts/icons allowed -->
+    <meta http-equiv="Content-Security-Policy"
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://generativelanguage.googleapis.com; base-uri 'self'; form-action 'none'; object-src 'none';" />
+    <meta name="theme-color" content="#0a6c8f" />
+    <link rel="manifest" href="manifest.json" />
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
+    <title>MediGuide AI · Smart Medicine Assistant</title>
+
+    <!-- Icons & Fonts -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" />
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
+        rel="stylesheet" />
+
+    <!-- App Styles -->
+    <link rel="stylesheet" href="css/style.css" />
+    <link rel="stylesheet" href="css/components.css" />
+    <link rel="stylesheet" href="css/modals.css" />
+</head>
+
+<body>
+    <a class="skip-link" href="#pageMedicine">Skip to main content</a>
+    <noscript><p class="noscript">MediGuide AI needs JavaScript. Please enable it and reload.</p></noscript>
+    <!-- ========== DISCLAIMER BANNER (SRS §9) ========== -->
+    <div class="disclaimer-banner" id="disclaimerBanner" role="alert">
+        <i class="fas fa-shield-alt"></i>
+        <span>
+            <strong data-i18n="bannerLead">Medical Disclaimer:</strong> <span data-i18n="bannerBody">MediGuide AI provides information only. It does not replace a doctor's prescription. No prescription replacement. Only CDSCO-approved medicines are listed.</span>
+        </span>
+        <button class="dismiss-banner" id="dismissBanner" aria-label="Dismiss disclaimer">
+            <i class="fas fa-times"></i>
+        </button>
+    </div>
+
+    <div class="app-wrapper">
+
+        <!-- ========== NAVBAR ========== -->
+        <nav class="navbar" aria-label="Main navigation">
+            <div class="logo" aria-label="MediGuide AI Home">
+                <i class="fas fa-heartbeat" aria-hidden="true"></i>
+                MediGuide <span class="ai-text">AI</span>
+            </div>
+
+            <div class="nav-center-badges" aria-label="App status badges">
+                <span class="badge badge-india"><i class="fas fa-map-marker-alt" aria-hidden="true"></i> India</span>
+                <span class="badge badge-ai"><i class="fas fa-brain" aria-hidden="true"></i> Gemini AI</span>
+                <span class="badge badge-secure"><i class="fas fa-shield-alt" aria-hidden="true"></i> HIPAA-Ready</span>
+                <span class="badge badge-cdsco"><i class="fas fa-check-circle" aria-hidden="true"></i> CDSCO</span>
+            </div>
+
+            <div class="nav-buttons">
+                <!-- Elderly / Accessibility toggle (FR-10) -->
+                <button class="nav-btn" id="elderlyToggle" aria-pressed="false" title="Toggle Elderly-Friendly Mode">
+                    <i class="fas fa-eye" aria-hidden="true"></i>
+                    <span class="btn-label" data-i18n="elderly">Elderly Mode</span>
+                </button>
+                <label class="nav-select" for="langSelect"><i class="fas fa-language" aria-hidden="true"></i>
+                    <span class="sr-only" data-i18n="language">Language</span>
+                    <select id="langSelect" aria-label="Language"></select></label>
+                <button class="nav-btn" id="voiceModeBtn" aria-pressed="false" title="Voice mode: answers are read aloud">
+                    <i class="fas fa-headset" aria-hidden="true"></i>
+                    <span class="btn-label" data-i18n="voiceMode">Voice Mode</span>
+                </button>
+                <button class="nav-btn" id="installBtn" hidden title="Install MediGuide AI">
+                    <i class="fas fa-download" aria-hidden="true"></i>
+                    <span class="btn-label" data-i18n="install">Install App</span>
+                </button>
+                <button class="nav-btn" id="aboutBtn" title="About MediGuide">
+                    <i class="fas fa-info-circle" aria-hidden="true"></i>
+                    <span class="btn-label" data-i18n="about">About</span>
+                </button>
+                <button class="nav-btn" id="settingsBtn" title="Settings">
+                    <i class="fas fa-sliders-h" aria-hidden="true"></i>
+                    <span class="btn-label" data-i18n="settings">Settings</span>
+                </button>
+                <button class="nav-btn" id="adminPanelBtn" title="Admin Dashboard">
+                    <i class="fas fa-user-shield" aria-hidden="true"></i>
+                    <span class="btn-label" data-i18n="admin">Admin</span>
+                </button>
+                <button class="nav-btn" id="profileBtn" title="My Profile" style="display:none;">
+                    <i class="fas fa-user-circle" aria-hidden="true"></i>
+                    <span class="btn-label" id="profileBtnLabel">Profile</span>
+                </button>
+                <button class="nav-btn primary" id="loginBtn" title="Login / Register">
+                    <i class="fas fa-lock" aria-hidden="true"></i>
+                    <span class="btn-label" data-i18n="login">Login</span>
+                </button>
+            </div>
+        </nav>
+
+        <!-- ========== PAGE TABS ========== -->
+        <div class="page-tabs" role="tablist" aria-label="Page navigation">
+            <button class="page-tab active" id="tabMedicine" role="tab" aria-selected="true"
+                aria-controls="pageMedicine" data-page="pageMedicine">
+                <i class="fas fa-prescription-bottle-alt" aria-hidden="true"></i> <span data-i18n="tabMedicine">Medicine</span>
+            </button>
+            <button class="page-tab" id="tabScanner" role="tab" aria-selected="false" aria-controls="pageScanner"
+                data-page="pageScanner">
+                <i class="fas fa-camera" aria-hidden="true"></i> <span data-i18n="tabScanner">Image Scanner</span>
+            </button>
+            <button class="page-tab" id="tabPrescription" role="tab" aria-selected="false"
+                aria-controls="pagePrescription" data-page="pagePrescription">
+                <i class="fas fa-file-medical" aria-hidden="true"></i> <span data-i18n="tabRx">Prescription</span>
+            </button>
+            <button class="page-tab" id="tabCare" role="tab" aria-selected="false" aria-controls="pageCare" data-page="pageCare">
+                <i class="fas fa-user-md" aria-hidden="true"></i> <span data-i18n="tabCare">Doctor</span>
+            </button>
+            <button class="page-tab" id="tabReminders" role="tab" aria-selected="false" aria-controls="pageReminders" data-page="pageReminders">
+                <i class="fas fa-bell" aria-hidden="true"></i> <span data-i18n="tabReminders">Reminders</span>
+            </button>
+        </div>
+
+        <!-- ========== MAIN GRID ========== -->
+        <main class="grid-2col" role="main" id="pageMedicine">
+
+            <!-- ===== LEFT: MEDICINE PANEL ===== -->
+            <section class="card" aria-label="Medicine search and details">
+                <div class="card-title">
+                    <i class="fas fa-prescription-bottle-alt" aria-hidden="true"></i>
+                    <span data-i18n="medInfo">Medicine Information</span>
+                    <span class="med-count-badge" id="medicineCountBadge" title="Medicines in database">
+                        <i class="fas fa-database" aria-hidden="true"></i>
+                        <span id="medicineCount">0</span> medicines
+                    </span>
+                </div>
+
+                <!-- Search -->
+                <div class="search-bar" role="search" aria-label="Medicine search">
+                    <input type="search" id="medicineSearch" placeholder="Search by name, company, category or symptom…" data-i18n-placeholder="searchPlaceholder"
+                        aria-label="Search medicines" autocomplete="off" autocorrect="off" spellcheck="false" />
+                    <button id="searchMicBtn" class="mic-btn" type="button" aria-label="Voice search" title="Voice search">
+                        <i class="fas fa-microphone" aria-hidden="true"></i>
+                    </button>
+                    <button id="searchBtn" aria-label="Search">
+                        <i class="fas fa-search" aria-hidden="true"></i> <span data-i18n="searchBtn">Search</span>
+                    </button>
+                </div>
+
+                <!-- Symptom / Filter row (FR-1.3) -->
+                <div class="filter-row" id="filterRow">
+                    <label class="filter-label" for="categoryFilter">
+                        <i class="fas fa-filter" aria-hidden="true"></i> <span data-i18n="filter">Filter:</span>
+                    </label>
+                    <select id="categoryFilter" aria-label="Filter by category">
+                        <option value="">All Categories</option>
+                    </select>
+                    <button class="filter-clear" id="clearFilter" title="Clear filter">
+                        <i class="fas fa-times" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <!-- Medicine Detail -->
+                <div class="med-detail" id="medDetail" aria-live="polite" aria-atomic="true"></div>
+
+                <!-- Company Directory (FR-6) -->
+                <div class="company-section">
+                    <div class="card-title small">
+                        <i class="fas fa-building" aria-hidden="true"></i>
+                        <span data-i18n="manufacturers">Manufacturers</span>
+                    </div>
+                    <div class="company-grid" id="companyGrid" aria-live="polite" aria-label="Filter by manufacturer">
+                        <span class="company-empty">
+                            <i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Loading…
+                        </span>
+                    </div>
+                </div>
+
+                <!-- Pharmacy Store Links (FR-5) — always visible below medicine -->
+                <div class="store-section">
+                    <div class="card-title small" style="margin-top:16px;">
+                        <i class="fas fa-shopping-cart" aria-hidden="true"></i>
+                        <span data-i18n="buyOnline">Buy Online (Verified Pharmacies)</span>
+                    </div>
+                    <div class="store-links" id="globalStoreLinks" aria-label="Online pharmacy links"></div>
+                </div>
+            </section>
+
+            <!-- ===== RIGHT: CHATBOT PANEL ===== -->
+            <section class="card chatbot-card" aria-label="MediChat AI assistant">
+                <div class="card-title">
+                    <i class="fas fa-robot" aria-hidden="true"></i>
+                    MediChat
+                    <span class="gemini-badge"><i class="fas fa-bolt" aria-hidden="true"></i> Gemini</span>
+                    <button class="chat-clear-btn" id="chatClearBtn" title="Clear chat history"
+                        aria-label="Clear chat history">
+                        <i class="fas fa-trash-alt" aria-hidden="true"></i>
+                    </button>
+                </div>
+
+                <!-- AI status (the key itself is managed by the administrator) -->
+                <div class="api-key-input" role="status">
+                    <span class="api-status" id="apiStatus" aria-live="polite">
+                        <i class="fas fa-circle" aria-hidden="true"></i> Not set
+                    </span>
+                    <span class="api-hint" id="apiHint"></span>
+                </div>
+
+                <!-- Chat Messages -->
+                <div class="chat-container">
+                    <div class="chat-messages" id="chatMessages" role="log" aria-label="Chat messages"
+                        aria-live="polite"></div>
+
+                    <!-- Multimodal Input Row (FR-7) -->
+                    <div class="chat-input-group" role="group" aria-label="Chat input">
+                        <input type="text" id="chatInput" placeholder="Ask about dosage, side effects, interactions…" data-i18n-placeholder="chatPlaceholder"
+                            aria-label="Chat message" autocomplete="off" />
+                        <button type="button" class="attach-btn" id="micBtn" title="Speak your question" aria-label="Voice input" aria-pressed="false">
+                            <i class="fas fa-microphone" aria-hidden="true"></i>
+                        </button>
+                        <label for="fileInput" class="attach-btn" title="Attach image, audio or video"
+                            aria-label="Attach image, audio or video">
+                            <i class="fas fa-image" aria-hidden="true"></i>
+                        </label>
+                        <input type="file" id="fileInput" accept="image/jpeg,image/png,image/webp,audio/mpeg,audio/wav,audio/x-wav,video/mp4,video/webm" hidden aria-label="Upload image, audio or video file" />
+                        <button class="send-btn" id="sendChatBtn" aria-label="Send message">
+                            <i class="fas fa-paper-plane" aria-hidden="true"></i>
+                        </button>
+                    </div>
+
+                    <!-- Attached image preview -->
+                    <div id="imagePreview" class="image-preview" style="display:none;" aria-live="polite"></div>
+                </div>
+
+                <!-- Quick-prompt chips -->
+                <div class="quick-prompts" aria-label="Quick question prompts">
+                    <button class="quick-chip" data-prompt="What are the common side effects?" data-i18n="qSide">Side Effects</button>
+                    <button class="quick-chip" data-prompt="What is the recommended dosage for adults?" data-i18n="qDose">Dosage</button>
+                    <button class="quick-chip"
+                        data-prompt="Are there any drug interactions I should know about?" data-i18n="qInter">Interactions</button>
+                    <button class="quick-chip" data-prompt="Is it safe during pregnancy?" data-i18n="qPreg">Pregnancy</button>
+                    <button class="quick-chip" data-prompt="What is the dosage for elderly patients above 65?" data-i18n="qElder">Elderly Dose</button>
+                </div>
+
+                <!-- Session Info (FR-8) -->
+                <div class="session-info" aria-label="Session information">
+                    <span id="sessionUser" aria-live="polite">
+                        <i class="fas fa-user-circle" aria-hidden="true"></i> Guest
+                    </span>
+                    <span>
+                        <i class="fas fa-calendar-alt" aria-hidden="true"></i>
+                        <span id="lastLogin">—</span>
+                    </span>
+                    <span class="twofa-badge">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i> 2FA Ready
+                    </span>
+                </div>
+            </section>
+        </main>
+
+        <!-- ========== SCANNER PAGE ========== -->
+        <section class="page-section" id="pageScanner" hidden aria-label="Medicine image scanner">
+            <div class="page-section-header">
+                <div class="page-section-title">
+                    <i class="fas fa-camera" aria-hidden="true"></i>
+                    Medicine Image Scanner
+                </div>
+                <p class="page-section-desc">Upload a photo of your medicine or packaging. It stays on your device and is
+                    sent to Gemini Vision AI only when you press Analyze.</p>
+            </div>
+
+            <div class="scanner-grid">
+                <!-- Upload zone -->
+                <div class="card scanner-card">
+                    <div class="card-title">
+                        <i class="fas fa-upload" aria-hidden="true"></i> Upload Medicine Image
+                    </div>
+
+                    <div class="drop-zone" id="scanDropZone" role="button" tabindex="0"
+                        aria-label="Drop medicine image here or browse">
+                        <div class="drop-zone-inner">
+                            <i class="fas fa-image drop-icon" aria-hidden="true"></i>
+                            <div class="drop-title">Drag &amp; Drop Medicine Image</div>
+                            <div class="drop-sub">JPG, PNG, WEBP · Max 5 MB</div>
+                            <button class="btn-secondary" id="scanBrowseBtn" type="button">
+                                <i class="fas fa-folder-open" aria-hidden="true"></i> Browse Files
+                            </button>
+                        </div>
+                    </div>
+                    <input type="file" id="scanFileInput" accept="image/jpeg,image/png,image/webp" hidden />
+
+                    <div id="scanPreview" style="display:none;"></div>
+
+                    <button class="btn-primary full" id="scanUploadBtn" style="margin-top:14px;">
+                        <i class="fas fa-upload" aria-hidden="true"></i> Upload &amp; Analyze
+                    </button>
+
+                    <div class="scan-disclaimer-note">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                        Images are not stored. Analysis is for reference only — not a definitive identification.
+                    </div>
+                </div>
+
+                <!-- Result + instructions -->
+                <div class="card scanner-info-card">
+                    <div class="card-title">
+                        <i class="fas fa-microscope" aria-hidden="true"></i> Scan Result
+                    </div>
+                    <div id="scanResult">
+                        <div class="scan-placeholder">
+                            <i class="fas fa-camera" aria-hidden="true"></i>
+                            <p>Upload a medicine image to see analysis results here.</p>
+                            <div class="scan-steps">
+                                <div class="scan-step">
+                                    <span class="step-num">1</span>
+                                    <span>Upload a clear photo of the medicine or packaging</span>
+                                </div>
+                                <div class="scan-step">
+                                    <span class="step-num">2</span>
+                                    <span>Press Upload &amp; Analyze (your image is not saved anywhere)</span>
+                                </div>
+                                <div class="scan-step">
+                                    <span class="step-num">3</span>
+                                    <span>Gemini Vision AI reads the label and suggests a match</span>
+                                </div>
+                                <div class="scan-step">
+                                    <span class="step-num">4</span>
+                                    <span>Open the matching medicine to see dosage and alternatives</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== PRESCRIPTION PAGE ========== -->
+        <section class="page-section" id="pagePrescription" hidden aria-label="Prescription analyzer">
+            <div class="page-section-header">
+                <div class="page-section-title">
+                    <i class="fas fa-file-medical" aria-hidden="true"></i>
+                    Prescription Analyzer
+                </div>
+                <p class="page-section-desc">Upload your prescription or type the medicine names to extract dosage and
+                    frequency information.</p>
+            </div>
+
+            <div class="scanner-grid">
+                <!-- Prescription upload -->
+                <div class="card scanner-card">
+                    <div class="card-title">
+                        <i class="fas fa-file-upload" aria-hidden="true"></i> Upload Prescription
+                    </div>
+
+                    <div class="drop-zone" id="rxDropZone" role="button" tabindex="0"
+                        aria-label="Drop prescription here">
+                        <div class="drop-zone-inner">
+                            <i class="fas fa-file-medical drop-icon" aria-hidden="true"></i>
+                            <div class="drop-title">Drag &amp; Drop Prescription</div>
+                            <div class="drop-sub">Image (JPG/PNG/WEBP) or PDF · Max 5 MB</div>
+                            <button class="btn-secondary" id="rxBrowseBtn" type="button">
+                                <i class="fas fa-folder-open" aria-hidden="true"></i> Browse Files
+                            </button>
+                        </div>
+                    </div>
+                    <input type="file" id="rxFileInput" accept="image/jpeg,image/png,image/webp,application/pdf"
+                        hidden />
+
+                    <div id="rxPreview" style="display:none;"></div>
+
+                    <button class="btn-primary full" id="rxUploadBtn" style="margin-top:14px;">
+                        <i class="fas fa-upload" aria-hidden="true"></i> Upload Prescription
+                    </button>
+
+                    <!-- Text analyzer -->
+                    <div class="rx-text-section">
+                        <div class="card-title small" style="margin-top:22px;">
+                            <i class="fas fa-keyboard" aria-hidden="true"></i> Or Paste Prescription Text
+                        </div>
+                        <textarea id="rxTextInput" class="rx-textarea"
+                            placeholder="E.g. Paracetamol 500mg twice daily for 5 days, Azithromycin 500mg once daily..."
+                            rows="5" aria-label="Prescription text input"></textarea>
+                        <button class="btn-primary full" id="rxAnalyzeBtn" style="margin-top:10px;">
+                            <i class="fas fa-search" aria-hidden="true"></i> Analyze Text
+                        </button>
+                    </div>
+
+                    <div class="scan-disclaimer-note">
+                        <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                        Never change your prescribed dose or medicine based on this analysis alone.
+                    </div>
+                </div>
+
+                <!-- Result -->
+                <div class="card scanner-info-card">
+                    <div class="card-title">
+                        <i class="fas fa-list-alt" aria-hidden="true"></i> Analysis Result
+                    </div>
+                    <div id="rxResult">
+                        <div class="scan-placeholder">
+                            <i class="fas fa-file-medical" aria-hidden="true"></i>
+                            <p>Upload a prescription or paste text to extract medicine information.</p>
+                            <div class="scan-steps">
+                                <div class="scan-step">
+                                    <span class="step-num">1</span>
+                                    <span>Upload prescription image or PDF</span>
+                                </div>
+                                <div class="scan-step">
+                                    <span class="step-num">2</span>
+                                    <span>Or type/paste the printed text from the prescription</span>
+                                </div>
+                                <div class="scan-step">
+                                    <span class="step-num">3</span>
+                                    <span>System identifies medicines, dosages and frequencies</span>
+                                </div>
+                                <div class="scan-step">
+                                    <span class="step-num">4</span>
+                                    <span>For handwritten prescriptions, use MediChat with image attachment</span>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </section>
+
+        <!-- ========== FOOTER ========== -->
+        <!-- ===== DOCTOR / TELECONSULTATION PAGE ===== -->
+        <section class="page-section" id="pageCare" hidden aria-label="Doctor appointments">
+            <h2 class="page-section-title"><i class="fas fa-user-md" aria-hidden="true"></i> <span data-i18n="careTitle">Talk to a doctor</span></h2>
+            <p class="page-section-desc" data-i18n="careNote">Sample doctors for demonstration only. In an emergency call 112.</p>
+            <p class="scan-disclaimer-note" id="careGate" role="status" hidden></p>
+            <div id="careBody" class="care-grid">
+                <div class="card">
+                    <ul class="doctor-list" id="doctorList" aria-label="Doctors"></ul>
+                    <div id="bookPanel" class="book-panel" hidden>
+                        <h3 id="bookTitle"></h3>
+                        <div class="form-row-2">
+                            <div class="form-group"><label for="bookDate" data-i18n="date">Date</label><input type="date" id="bookDate" /></div>
+                            <div class="form-group"><label for="bookMode">Type</label><select id="bookMode"></select></div>
+                        </div>
+                        <div class="slot-list" id="slotList" role="group" aria-label="Available times"></div>
+                        <div class="form-group"><label for="bookReason" data-i18n="reason">Reason (optional)</label><input type="text" id="bookReason" maxlength="200" /></div>
+                        <div class="modal-actions">
+                            <button class="btn-primary" id="bookConfirm" type="button" disabled><i class="fas fa-check" aria-hidden="true"></i> <span data-i18n="confirm">Confirm booking</span></button>
+                            <button class="btn-secondary" id="bookCancel" type="button" data-i18n="cancel">Cancel</button>
+                        </div>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title small"><i class="fas fa-calendar-check" aria-hidden="true"></i> <span data-i18n="myAppts">My appointments</span></div>
+                    <ul class="appt-list" id="apptList" aria-live="polite"></ul>
+                    <p class="settings-note">Video visits open a meet.jit.si room (third-party service). The link is shown only to you.</p>
+                </div>
+            </div>
+        </section>
+
+        <!-- ===== REMINDERS PAGE ===== -->
+        <section class="page-section" id="pageReminders" hidden aria-label="Medicine reminders">
+            <h2 class="page-section-title"><i class="fas fa-bell" aria-hidden="true"></i> <span data-i18n="remTitle">Medicine reminders</span></h2>
+            <p class="page-section-desc" data-i18n="remNote">Reminders ring while MediGuide is open in your browser.</p>
+            <div class="care-grid">
+                <div class="card">
+                    <div class="card-title small"><i class="fas fa-plus-circle" aria-hidden="true"></i> <span data-i18n="addReminder">Add reminder</span></div>
+                    <div class="form-group"><label for="remMedicine" data-i18n="medicineName">Medicine name</label>
+                        <input type="text" id="remMedicine" list="remMedList" maxlength="80" autocomplete="off" /><datalist id="remMedList"></datalist></div>
+                    <div class="form-row-2">
+                        <div class="form-group"><label for="remDose" data-i18n="doseLbl">Dose</label><input type="text" id="remDose" maxlength="60" placeholder="1 tablet" /></div>
+                        <div class="form-group"><label for="remDays" data-i18n="daysLbl">For how many days</label><input type="number" id="remDays" min="1" max="365" inputmode="numeric" /></div>
+                    </div>
+                    <div class="form-row-2">
+                        <div class="form-group"><label for="remTimeInput" data-i18n="timesLbl">Times</label><input type="time" id="remTimeInput" /></div>
+                        <div class="form-group"><label for="remStart">Start</label><input type="date" id="remStart" /></div>
+                    </div>
+                    <button class="btn-secondary" id="remAddTimeBtn" type="button"><i class="fas fa-clock" aria-hidden="true"></i> <span data-i18n="addTime">Add time</span></button>
+                    <ul class="time-chips" id="remTimesList" aria-live="polite"></ul>
+                    <div class="modal-actions">
+                        <button class="btn-primary" id="remSaveBtn" type="button"><i class="fas fa-save" aria-hidden="true"></i> <span data-i18n="saveReminder">Save reminder</span></button>
+                        <button class="btn-secondary" id="remNotifBtn" type="button" hidden><i class="fas fa-bell" aria-hidden="true"></i> <span data-i18n="enableNotif">Allow notifications</span></button>
+                    </div>
+                </div>
+                <div class="card">
+                    <div class="card-title small"><i class="fas fa-sun" aria-hidden="true"></i> Today</div>
+                    <ul class="today-list" id="remToday"></ul>
+                    <div class="card-title small" style="margin-top:16px;"><i class="fas fa-list" aria-hidden="true"></i> <span data-i18n="tabReminders">Reminders</span></div>
+                    <ul class="rem-list" id="remList"></ul>
+                </div>
+            </div>
+        </section>
+
+
+        <footer class="footer-note" role="contentinfo">
+            <span><i class="fas fa-lock" aria-hidden="true"></i> TLS Encrypted</span>
+            <span><i class="fas fa-check-circle" aria-hidden="true"></i> Only CDSCO-approved medicines.</span>
+            <span><i class="fas fa-robot" aria-hidden="true"></i> AI by Gemini</span>
+            <span><i class="fas fa-hospital" aria-hidden="true"></i> Not a prescription service</span>
+            <span><i class="fas fa-phone-alt" aria-hidden="true"></i> Emergency: 112</span>
+            <span class="footer-disclaimer">
+                © 2025 MediGuide AI · For informational use only · Consult a licensed physician
+            </span>
+        </footer>
+    </div>
+
+    <!-- ========== LOGIN MODAL (FR-8) ========== -->
+    <div class="modal-overlay" id="loginModal" role="dialog" aria-modal="true" aria-labelledby="loginModalTitle" hidden>
+        <div class="modal" style="max-width:420px;">
+            <div class="modal-header">
+                <div class="modal-title" id="loginModalTitle">
+                    <i class="fas fa-lock" aria-hidden="true"></i> Secure Login
+                </div>
+                <button class="modal-close" data-modal="loginModal" aria-label="Close login modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="auth-tabs" role="tablist">
+                    <button class="auth-tab active" id="tabLogin" role="tab" aria-selected="true"
+                        aria-controls="panelLogin">Login</button>
+                    <button class="auth-tab" id="tabRegister" role="tab" aria-selected="false"
+                        aria-controls="panelRegister">Register</button>
+                </div>
+
+                <!-- Login Panel -->
+                <div id="panelLogin" class="auth-panel" role="tabpanel" aria-labelledby="tabLogin">
+                    <div class="form-group">
+                        <label for="loginEmail"><i class="fas fa-envelope" aria-hidden="true"></i> Email</label>
+                        <input type="email" id="loginEmail" placeholder="you@example.com" autocomplete="email" />
+                    </div>
+                    <div class="form-group">
+                        <label for="loginPassword"><i class="fas fa-key" aria-hidden="true"></i> Password</label>
+                        <input type="password" id="loginPassword" placeholder="••••••••"
+                            autocomplete="current-password" />
+                    </div>
+                    <div class="form-group twofa-row">
+                        <label for="loginTOTP"><i class="fas fa-mobile-alt" aria-hidden="true"></i> 2FA Code <span
+                                class="optional-badge">only if enabled</span></label>
+                        <input type="text" id="loginTOTP" placeholder="6-digit code" maxlength="6" inputmode="numeric"
+                            autocomplete="one-time-code" />
+                    </div>
+                    <button class="btn-secondary full" id="oauthBtn" type="button" hidden><i class="fab fa-google" aria-hidden="true"></i> Continue with Google</button>
+                    <button class="btn-primary full" id="doLoginBtn">
+                        <i class="fas fa-sign-in-alt" aria-hidden="true"></i> Login Securely
+                    </button>
+                    <p class="auth-note">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i>
+                        Phase 1: accounts are stored only on this device. Register first, then log in. Backend auth (JWT/OAuth2) is planned.
+                    </p>
+                </div>
+
+                <!-- Register Panel -->
+                <div id="panelRegister" class="auth-panel" role="tabpanel" aria-labelledby="tabRegister" hidden>
+                    <div class="form-group">
+                        <label for="regName"><i class="fas fa-user" aria-hidden="true"></i> Full Name</label>
+                        <input type="text" id="regName" placeholder="Ravi Kumar" autocomplete="name" />
+                    </div>
+                    <div class="form-group">
+                        <label for="regEmail"><i class="fas fa-envelope" aria-hidden="true"></i> Email</label>
+                        <input type="email" id="regEmail" placeholder="you@example.com" autocomplete="email" />
+                    </div>
+                    <div class="form-group">
+                        <label for="regPassword"><i class="fas fa-key" aria-hidden="true"></i> Password</label>
+                        <input type="password" id="regPassword" placeholder="Min 8 characters"
+                            autocomplete="new-password" />
+                    </div>
+                    <div class="form-check">
+                        <input type="checkbox" id="consentCheck" />
+                        <label for="consentCheck">
+                            I understand MediGuide AI is <strong>informational only</strong> and does not replace
+                            medical advice.
+                        </label>
+                    </div>
+                    <button class="btn-primary full" id="doRegisterBtn">
+                        <i class="fas fa-user-plus" aria-hidden="true"></i> Create Account
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== PROFILE MODAL (FR-8) ========== -->
+    <div class="modal-overlay" id="profileModal" role="dialog" aria-modal="true" aria-labelledby="profileModalTitle"
+        hidden>
+        <div class="modal" style="max-width:480px;">
+            <div class="modal-header">
+                <div class="modal-title" id="profileModalTitle">
+                    <i class="fas fa-user-circle" aria-hidden="true"></i> My Profile
+                </div>
+                <button class="modal-close" data-modal="profileModal" aria-label="Close profile modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="profile-avatar-row">
+                    <div class="profile-avatar" id="profileAvatar" aria-label="Profile avatar">
+                        <i class="fas fa-user" aria-hidden="true"></i>
+                    </div>
+                    <div>
+                        <div class="profile-name" id="profileName">—</div>
+                        <div class="profile-email" id="profileEmail">—</div>
+                        <div class="profile-badges">
+                            <span class="badge badge-secure"><i class="fas fa-shield-alt" aria-hidden="true"></i> 2FA
+                                Ready</span>
+                            <span class="badge badge-ai">Verified</span>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="profile-section">
+                    <div class="profile-section-title"><i class="fas fa-heartbeat" aria-hidden="true"></i> Health
+                        Profile</div>
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label for="profileAge"><i class="fas fa-birthday-cake" aria-hidden="true"></i> Age</label>
+                            <input type="number" id="profileAge" placeholder="e.g. 65" min="1" max="120" />
+                        </div>
+                        <div class="form-group">
+                            <label for="profileWeight"><i class="fas fa-weight" aria-hidden="true"></i> Weight
+                                (kg)</label>
+                            <input type="number" id="profileWeight" placeholder="e.g. 70" min="1" max="300" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="profileConditions"><i class="fas fa-notes-medical" aria-hidden="true"></i> Known
+                            Conditions</label>
+                        <input type="text" id="profileConditions" placeholder="e.g. Hypertension, Diabetes" />
+                    </div>
+                    <div class="form-group">
+                        <label for="profileAllergies"><i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                            Allergies</label>
+                        <input type="text" id="profileAllergies" placeholder="e.g. Penicillin" />
+                    </div>
+                </div>
+
+                <div class="profile-section">
+                    <div class="profile-section-title"><i class="fas fa-id-card" aria-hidden="true"></i> <span data-i18n="abhaTitle">ABHA (Health Account)</span></div>
+                    <div class="form-row-2">
+                        <div class="form-group"><label for="profileAbhaNumber">ABHA number</label><input type="text" id="profileAbhaNumber" placeholder="12-3456-7890-1234" inputmode="numeric" autocomplete="off" /></div>
+                        <div class="form-group"><label for="profileAbhaAddress">ABHA address</label><input type="text" id="profileAbhaAddress" placeholder="name@abdm" autocomplete="off" /></div>
+                    </div>
+                    <p class="settings-note">Format check only. This does not verify your ABHA with the National Health Authority.</p>
+                </div>
+
+                <div class="profile-section" id="twofaSection" hidden>
+                    <div class="profile-section-title"><i class="fas fa-shield-alt" aria-hidden="true"></i> Two-step login: <span id="twofaStatus">Off</span></div>
+                    <button class="btn-secondary" id="twofaSetupBtn" type="button">Turn on with an authenticator app</button>
+                    <div id="twofaBox" hidden>
+                        <p class="settings-note">Add this key to Google Authenticator, Authy or similar, then enter the 6-digit code.</p>
+                        <p><code id="twofaSecret"></code> <a id="twofaLink" href="#" class="link-btn">Open in authenticator</a></p>
+                        <div class="api-key-row"><input type="text" id="twofaCode" maxlength="6" inputmode="numeric" placeholder="6-digit code" autocomplete="one-time-code" aria-label="6-digit code" />
+                            <button class="btn-primary" id="twofaEnableBtn" type="button">Confirm</button></div>
+                    </div>
+                    <div id="twofaOffBox" hidden>
+                        <div class="api-key-row"><input type="password" id="twofaPassword" placeholder="Your password" autocomplete="current-password" aria-label="Password to turn off two-step login" />
+                            <button class="btn-danger" id="twofaDisableBtn" type="button">Turn off</button></div>
+                    </div>
+                </div>
+
+                <div class="profile-section">
+                    <div class="profile-section-title"><i class="fas fa-history" aria-hidden="true"></i> Session Info
+                    </div>
+                    <div class="profile-info-row">
+                        <span><i class="fas fa-calendar" aria-hidden="true"></i> Logged in:</span>
+                        <span id="profileLoginTime">—</span>
+                    </div>
+                    <div class="profile-info-row">
+                        <span><i class="fas fa-comment-medical" aria-hidden="true"></i> Chat messages:</span>
+                        <span id="profileChatCount">0</span>
+                    </div>
+                </div>
+
+                <div class="modal-actions">
+                    <button class="btn-primary" id="saveProfileBtn">
+                        <i class="fas fa-save" aria-hidden="true"></i> Save Profile
+                    </button>
+                    <button class="btn-danger" id="logoutBtn">
+                        <i class="fas fa-sign-out-alt" aria-hidden="true"></i> Logout
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== SETTINGS MODAL (FR-9, §8.4) ========== -->
+    <div class="modal-overlay" id="settingsModal" role="dialog" aria-modal="true" aria-labelledby="settingsModalTitle"
+        hidden>
+        <div class="modal" style="max-width:500px;">
+            <div class="modal-header">
+                <div class="modal-title" id="settingsModalTitle">
+                    <i class="fas fa-sliders-h" aria-hidden="true"></i> Settings
+                </div>
+                <button class="modal-close" data-modal="settingsModal" aria-label="Close settings modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+
+                
+
+                <!-- Appearance Section -->
+                <div class="settings-section">
+                    <div class="settings-section-title">
+                        <i class="fas fa-palette" aria-hidden="true"></i> Appearance
+                    </div>
+                    <div class="toggle-row">
+                        <span><i class="fas fa-eye" aria-hidden="true"></i> Elderly-Friendly Mode (large fonts)</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settingsElderlyMode" />
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="toggle-row">
+                        <span><i class="fas fa-adjust" aria-hidden="true"></i> High-Contrast Mode</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settingsHighContrast" />
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <div class="form-group" style="margin-top:12px;">
+                        <label for="settingsFontSize">Font Size</label>
+                        <select id="settingsFontSize">
+                            <option value="normal">Normal</option>
+                            <option value="large">Large</option>
+                            <option value="xlarge">Extra Large</option>
+                        </select>
+                    </div>
+                </div>
+
+                <!-- Notifications / Privacy -->
+                <div class="settings-section">
+                    <div class="settings-section-title">
+                        <i class="fas fa-user-shield" aria-hidden="true"></i> Privacy
+                    </div>
+                    <div class="toggle-row">
+                        <span><i class="fas fa-history" aria-hidden="true"></i> Save chat history locally</span>
+                        <label class="toggle-switch">
+                            <input type="checkbox" id="settingsSaveHistory" checked />
+                            <span class="slider"></span>
+                        </label>
+                    </div>
+                    <button class="btn-danger" id="clearAllDataBtn" style="margin-top:12px;">
+                        <i class="fas fa-trash-alt" aria-hidden="true"></i> Clear All Local Data
+                    </button>
+                    <p class="settings-note" style="margin-top:8px;">Removes your API key, chat history, profile and all
+                        settings from this device.</p>
+                </div>
+
+                <!-- App Info -->
+                <div class="settings-section settings-info">
+                    <div class="settings-section-title">
+                        <i class="fas fa-info-circle" aria-hidden="true"></i> App Info
+                    </div>
+                    <div class="profile-info-row"><span>Version</span><span id="appVersion">1.0.0</span></div>
+                    <div class="profile-info-row"><span>Standard</span><span>CDSCO · HIPAA-Ready · WCAG 2.1</span></div>
+                    <div class="profile-info-row"><span>Data source</span><span>Curated CDSCO dataset</span></div>
+                    <div class="profile-info-row"><span>AI provider</span><span>Google Gemini (model configurable)</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== ABOUT MODAL (FR-6) ========== -->
+    <div class="modal-overlay" id="aboutModal" role="dialog" aria-modal="true" aria-labelledby="aboutModalTitle" hidden>
+        <div class="modal" style="max-width:600px;">
+            <div class="modal-header">
+                <div class="modal-title" id="aboutModalTitle">
+                    <i class="fas fa-heartbeat" aria-hidden="true"></i> About MediGuide AI
+                </div>
+                <button class="modal-close" data-modal="aboutModal" aria-label="Close about modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="about-hero">
+                    <div class="about-logo">
+                        <i class="fas fa-heartbeat" aria-hidden="true"></i>
+                        MediGuide <span class="ai-text">AI</span>
+                    </div>
+                    <p class="about-tagline">India's trusted CDSCO-approved smart medicine assistant</p>
+                </div>
+
+                <div class="about-grid">
+                    <div class="about-card">
+                        <i class="fas fa-check-circle" aria-hidden="true"></i>
+                        <h3>CDSCO-Approved</h3>
+                        <p>Only medicines approved by India's Central Drugs Standard Control Organisation are listed.
+                        </p>
+                    </div>
+                    <div class="about-card">
+                        <i class="fas fa-robot" aria-hidden="true"></i>
+                        <h3>Gemini AI</h3>
+                        <p>Powered by Google Gemini multimodal AI for text, image-based medicine queries and more.</p>
+                    </div>
+                    <div class="about-card">
+                        <i class="fas fa-shield-alt" aria-hidden="true"></i>
+                        <h3>HIPAA-Ready</h3>
+                        <p>Security-first architecture. Your data stays on your device. TLS-encrypted API calls only.
+                        </p>
+                    </div>
+                    <div class="about-card">
+                        <i class="fas fa-eye" aria-hidden="true"></i>
+                        <h3>Elderly-Friendly</h3>
+                        <p>WCAG 2.1-compliant design with large fonts, high-contrast mode and visual dosage charts.</p>
+                    </div>
+                </div>
+
+                <div class="about-disclaimer-box">
+                    <i class="fas fa-exclamation-triangle" aria-hidden="true"></i>
+                    <div>
+                        <strong>Important Disclaimer</strong>
+                        <p>MediGuide AI is an <em>informational tool only</em>. It does not prescribe medicines, replace
+                            a licensed physician, or provide emergency medical advice. Always consult your doctor or
+                            pharmacist before taking any medication.</p>
+                    </div>
+                </div>
+
+                <div class="about-links">
+                    <a href="https://cdsco.gov.in" target="_blank" rel="noopener noreferrer" class="about-link">
+                        <i class="fas fa-external-link-alt" aria-hidden="true"></i> CDSCO India
+                    </a>
+                    <a href="https://www.who.int" target="_blank" rel="noopener noreferrer" class="about-link">
+                        <i class="fas fa-external-link-alt" aria-hidden="true"></i> WHO
+                    </a>
+                    <a href="https://indianpharmacycouncil.org" target="_blank" rel="noopener noreferrer"
+                        class="about-link">
+                        <i class="fas fa-external-link-alt" aria-hidden="true"></i> Indian Pharmacy Council
+                    </a>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== ADMIN MODAL (FR-20) ========== -->
+    <div class="modal-overlay" id="adminModal" role="dialog" aria-modal="true" aria-labelledby="adminModalTitle" hidden>
+        <div class="modal" style="max-width:800px;width:95%;">
+            <div class="modal-header">
+                <div class="modal-title" id="adminModalTitle">
+                    <i class="fas fa-user-shield" aria-hidden="true"></i> Admin Dashboard
+                </div>
+                <button class="modal-close" data-modal="adminModal" aria-label="Close admin modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div class="auth-tabs" role="tablist">
+                    <button class="admin-tab auth-tab active" data-panel="adminPanelStats" role="tab" aria-selected="true">Stats</button>
+                    <button class="admin-tab auth-tab" data-panel="adminPanelKeys" role="tab" aria-selected="false">API Key</button>
+                    <button class="admin-tab auth-tab" data-panel="adminPanelMeds" role="tab" aria-selected="false">Medicines</button>
+                    <button class="admin-tab auth-tab" data-panel="adminPanelUsers" role="tab" aria-selected="false">Users</button>
+                    <button class="admin-tab auth-tab" data-panel="adminPanelAudit" role="tab">Audit Log</button>
+                </div>
+                <div id="adminPanelStats" class="admin-panel" style="margin-top:16px;">
+                    <div id="adminStatsContent">
+                        <div class="admin-loading"><i class="fas fa-spinner fa-spin"></i> Loading…</div>
+                    </div>
+                </div>
+                <div id="adminPanelKeys" class="admin-panel" hidden style="margin-top:16px;">
+                    <div class="key-box">
+                        <div class="settings-section-title"><i class="fas fa-key" aria-hidden="true"></i> Gemini API key
+                            <span class="api-status" id="adminKeyStatus" aria-live="polite"></span></div>
+                        <p class="settings-note"><span id="adminKeyNote"></span>
+                            Get a free key at <a href="https://aistudio.google.com" target="_blank" rel="noopener noreferrer">aistudio.google.com</a>.</p>
+                        <div class="form-group">
+                            <label for="adminApiKey">New API key</label>
+                            <div class="api-key-row">
+                                <input type="password" id="adminApiKey" placeholder="AIza…" autocomplete="off" spellcheck="false" />
+                                <button class="icon-btn" id="adminToggleKey" type="button" aria-label="Show or hide key"><i class="fas fa-eye" aria-hidden="true"></i></button>
+                            </div>
+                        </div>
+                        <div class="form-group">
+                            <label for="adminModel">AI model <span class="optional-badge">optional</span></label>
+                            <input type="text" id="adminModel" placeholder="Default model" autocomplete="off" spellcheck="false" />
+                        </div>
+                        <div class="modal-actions">
+                            <button class="btn-primary" id="adminSaveKey" type="button"><i class="fas fa-save" aria-hidden="true"></i> Save key</button>
+                            <button class="btn-danger" id="adminRemoveKey" type="button"><i class="fas fa-trash-alt" aria-hidden="true"></i> Remove key</button>
+                        </div>
+                    </div>
+                </div>
+                <div id="adminPanelMeds" class="admin-panel" hidden style="margin-top:16px;">
+                    <p class="settings-note">Edit the plain-language reasons each medicine is commonly taken. Separate items with commas. These appear on the medicine card and are searchable.</p>
+                    <div id="adminMedsContent"></div>
+                </div>
+                <div id="adminPanelUsers" class="admin-panel" hidden style="margin-top:16px;">
+                    <div id="adminUsersContent"></div>
+                </div>
+                <div id="adminPanelAudit" class="admin-panel" hidden style="margin-top:16px;">
+                    <div id="adminAuditContent"></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== CONSENT MODAL (SRS §8.4, NFR-3.8) ========== -->
+    <div class="modal-overlay" id="consentModal" data-static="true" role="dialog" aria-modal="true" aria-labelledby="consentTitle" hidden>
+        <div class="modal" style="max-width:520px;">
+            <div class="modal-header">
+                <div class="modal-title" id="consentTitle"><i class="fas fa-user-shield" aria-hidden="true"></i> Before you start</div>
+            </div>
+            <div class="modal-body">
+                <p><strong>MediGuide AI gives information only.</strong> It does not replace a doctor and cannot prescribe medicines.</p>
+                <ul class="consent-list">
+                    <li><i class="fas fa-hard-drive" aria-hidden="true"></i> Your key, profile and chats are saved <strong>only on this device</strong>. You can erase them any time in Settings.</li>
+                    <li><i class="fas fa-paper-plane" aria-hidden="true"></i> When you chat or scan, your message and any photo, audio or video you attach are <strong>sent securely to Google Gemini</strong> to get an answer.</li>
+                    <li><i class="fas fa-ban" aria-hidden="true"></i> No tracking or analytics. Your API key is never sent anywhere except Google.</li>
+                </ul>
+                <div class="form-check">
+                    <input type="checkbox" id="consentShareProfile" />
+                    <label for="consentShareProfile">Also let the AI see my profile (age, weight, conditions, allergies) to give more careful answers. <em>Optional.</em></label>
+                </div>
+                <div class="modal-actions">
+                    <button class="btn-primary" id="consentAccept" data-autofocus><i class="fas fa-check" aria-hidden="true"></i> I understand and agree</button>
+                    <button class="btn-secondary" id="consentDecline">Not now</button>
+                </div>
+                <p class="settings-note">Browsing medicines works without consent. Chat and scanning need it.</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== COMPANY MODAL (FR-6.5) ========== -->
+    <div class="modal-overlay" id="companyModal" role="dialog" aria-modal="true" aria-labelledby="companyModalTitle" hidden>
+        <div class="modal" style="max-width:520px;">
+            <div class="modal-header">
+                <div class="modal-title" id="companyModalTitle">Company</div>
+                <button class="modal-close" data-modal="companyModal" aria-label="Close company modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body" id="companyModalBody"></div>
+        </div>
+    </div>
+
+    <!-- ========== TOAST CONTAINER ========== -->
+    <div id="toastContainer" aria-live="assertive" aria-atomic="true" class="toast-container"></div>
+
+    <!-- ========== APP ENTRY POINT ========== -->
+    <script type="module" src="js/app.js"></script>
+</body>
+
+</html>

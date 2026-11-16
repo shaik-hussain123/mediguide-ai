@@ -1,0 +1,26 @@
+{
+  "name": "mediguide-ai",
+  "version": "1.0.0",
+  "description": "Elderly-friendly medicine assistant for India: Gemini chatbot, multilingual voice UI, reminders, teleconsultation booking, Node backend.",
+  "type": "module",
+  "main": "index.html",
+  "scripts": {
+    "start": "node --no-warnings server/index.js",
+    "static": "npx --yes serve . -l 5500",
+    "make-admin": "node --no-warnings server/cli.js make-admin",
+    "test": "node --no-warnings tests/run.mjs && node --no-warnings tests/server.test.mjs",
+    "dev": "node --no-warnings --watch server/index.js"
+  },
+  "keywords": [
+    "medicine",
+    "healthcare",
+    "gemini",
+    "chatbot",
+    "india"
+  ],
+  "license": "MIT",
+  "private": true,
+  "engines": {
+    "node": ">=22.5"
+  }
+}
