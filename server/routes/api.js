@@ -41,6 +41,75 @@ const reminderOut = (r) => ({ id: r.id, medicine: r.medicine, dose: r.dose, time
 
 const ALLOWED_MIME = new Set(['image/jpeg', 'image/png', 'image/webp', 'audio/mpeg', 'audio/wav', 'audio/x-wav', 'video/mp4', 'video/webm', 'application/pdf']);
 
+/* ---------- nearby places (clinic, hospital, pharmacy, emergency) ---------- */
+const FACILITY_TYPES = {
+  clinic: '["amenity"="clinic"]',
+  hospital: '["amenity"="hospital"]',
+  pharmacy: '["amenity"="pharmacy"]',
+  emergency: '["emergency"="yes"]'
+};
+
+async function fetchNearbyPlaces(latitude, longitude, radius, type) {
+  const tag = FACILITY_TYPES[type];
+  const query = `[out:json][timeout:25];
+    (
+      node${tag}(around:${radius},${latitude},${longitude});
+      way${tag}(around:${radius},${latitude},${longitude});
+      relation${tag}(around:${radius},${latitude},${longitude});
+    );
+    out center;`;
+
+  const res = await fetch('https://overpass-api.de/api/interpreter', {
+    method: 'POST',
+    headers: { 'User-Agent': 'MediGuide-AI/1.0', 'Content-Type': 'application/x-www-form-urlencoded' },
+    body: new URLSearchParams({ data: query })
+  });
+
+  if (!res.ok) throw new HttpError(502, 'Places service unavailable');
+
+  const data = await res.json();
+
+  // Calculate Haversine distance
+  const R = 6371000; // Earth radius in meters
+  function toRad(x) { return x * Math.PI / 180; }
+
+  const places = [];
+  for (const element of data.elements || []) {
+    let lat, lon;
+    if (element.type === 'node') {
+      lat = element.lat; lon = element.lon;
+    } else if (element.center) {
+      lat = element.center.lat; lon = element.center.lon;
+    } else continue;
+
+    const tags = element.tags || {};
+    const name = tags.name || 'Unnamed Facility';
+
+    // Build address
+    const addrParts = [];
+    for (const key of ['addr:housenumber', 'addr:street', 'addr:city', 'addr:postcode', 'addr:suburb']) {
+      if (tags[key]) addrParts.push(tags[key]);
+    }
+    const address = addrParts.length ? addrParts.join(', ') : 'Address not available';
+
+    // Calculate distance
+    const dLat = toRad(lat - latitude);
+    const dLon = toRad(lon - longitude);
+    const a = Math.sin(dLat/2)**2 + Math.cos(toRad(latitude)) * Math.cos(toRad(lat)) * Math.sin(dLon/2)**2;
+    const distance = Math.round(R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a)));
+
+    places.push({
+      name, type, address, distance,
+      latitude: lat, longitude: lon,
+      directions_url: `https://www.google.com/maps?q=${lat},${lon}`
+    });
+  }
+
+  // Sort by distance
+  places.sort((a, b) => a.distance - b.distance);
+  return places;
+}
+
 function cleanParts(parts) {
   if (!Array.isArray(parts) || !parts.length || parts.length > 3) throw bad('Send 1 to 3 message parts.');
   return parts.map((p) => {
@@ -53,6 +122,21 @@ function cleanParts(parts) {
 
 export const apiRoutes = [
   ['GET', '/api/health', () => ({ body: { ok: true, ai: aiReady(), time: now() } })],
+
+  /* ---------- nearby healthcare facilities ---------- */
+  ['GET', '/api/places/nearby', async ({ query }) => {
+    const latitude = Number(query.latitude);
+    const longitude = Number(query.longitude);
+    const radius = int(query.radius || 5000, 'Radius', 100, 50000);
+    const type = query.type || 'clinic';
+
+    if (!(-90 <= latitude && latitude <= 90)) throw bad('Latitude must be between -90 and 90.');
+    if (!(-180 <= longitude && longitude <= 180)) throw bad('Longitude must be between -180 and 180.');
+    if (!FACILITY_TYPES[type]) throw bad('Invalid facility type. Must be one of: clinic, hospital, pharmacy, emergency.');
+
+    const places = await fetchNearbyPlaces(latitude, longitude, radius, type);
+    return { body: { places, total: places.length } };
+  }],
 
   /* ---------- profile (+ language + ABHA) ---------- */
   ['PUT', '/api/profile', ({ user, body }) => {

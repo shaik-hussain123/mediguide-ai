@@ -11,10 +11,15 @@ def test_dosage_engine_risk_levels():
     res1 = engine.evaluate(req1, med_data)
     assert res1.risk_level == "INFORMATIONAL"
 
-    # Test High Risk (approaching limit)
-    req2 = DosageRequest(med_id=1, dosage=900, unit="mg", frequency="OD", route="oral")
+    # Test High Risk (above 90% threshold)
+    req2 = DosageRequest(med_id=1, dosage=901, unit="mg", frequency="OD", route="oral")
     res2 = engine.evaluate(req2, med_data)
     assert res2.risk_level == "HIGH_RISK"
+
+    # Test Elevated Risk (75-90% range)
+    req2b = DosageRequest(med_id=1, dosage=800, unit="mg", frequency="OD", route="oral")
+    res2b = engine.evaluate(req2b, med_data)
+    assert res2b.risk_level == "ELEVATED_RISK"
 
     # Test Critical
     req3 = DosageRequest(med_id=1, dosage=1100, unit="mg", frequency="OD", route="oral")

@@ -1,13 +1,46 @@
+# Node.js
 node_modules/
+
+# Environment files
+.env
+.env.*
+!.env.example
+
+# SQLite database
 data/*.db
 data/*.db-*
 data/.secrets.json
-.env
+
+# Python
 __pycache__/
 *.pyc
-.env
-.env.*
-uploads/
+*.pyo
+*.pyd
+.Python
+*.so
+.Python
+pip-log.txt
+pip-delete-this-directory.txt
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Test coverage
 .pytest_cache/
-__pycache__/
-*.pyc
+.coverage
+htmlcov/
+
+# Uploads
+uploads/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db

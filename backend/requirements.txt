@@ -5,6 +5,8 @@ python-multipart
 aiofiles
 pillow
 motor
-pyjwt
-passlib[bcrypt]
+pyjwt>=2.8.0
+passlib[bcrypt]>=1.7.4
 python-dotenv
+qrcode[pil]
+slowapi>=0.1.9
