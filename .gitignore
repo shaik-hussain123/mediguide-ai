@@ -3,3 +3,11 @@ data/*.db
 data/*.db-*
 data/.secrets.json
 .env
+__pycache__/
+*.pyc
+.env
+.env.*
+uploads/
+.pytest_cache/
+__pycache__/
+*.pyc
