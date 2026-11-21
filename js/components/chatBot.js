@@ -151,17 +151,101 @@ export async function send(textOverride) {
 
 /* ---------------- voice input (language follows the UI language) ---------------- */
 function initVoice() {
-  if (!sttSupported) { el.mic.hidden = true; return; }
+  const { stt, message } = getVoiceSupport();
+  if (!stt) {
+    el.mic.hidden = true;
+    if (message) showToast(message, 'warn');
+    return;
+  }
   let ctl = null;
-  el.mic.addEventListener('click', () => {
+  let transcriptPreview = null;
+
+  function showTranscriptPreview(text) {
+    if (!transcriptPreview) {
+      transcriptPreview = document.createElement('div');
+      transcriptPreview.className = 'voice-transcript-preview';
+      transcriptPreview.setAttribute('role', 'status');
+      transcriptPreview.setAttribute('aria-live', 'polite');
+      el.input.parentNode.insertBefore(transcriptPreview, el.input.nextSibling);
+    }
+    transcriptPreview.textContent = text;
+    transcriptPreview.style.display = 'block';
+  }
+
+  function hideTranscriptPreview() {
+    if (transcriptPreview) {
+      transcriptPreview.style.display = 'none';
+      transcriptPreview.textContent = '';
+    }
+  }
+
+  function showRetryToast(message) {
+    const toast = showToast(message, 'warn', 0);
+    const retryBtn = document.createElement('button');
+    retryBtn.className = 'toast-retry-btn';
+    retryBtn.textContent = 'Retry';
+    retryBtn.setAttribute('aria-label', 'Retry voice input');
+    retryBtn.addEventListener('click', () => {
+      toast.remove();
+      startListening();
+    });
+    toast.appendChild(retryBtn);
+  }
+
+  function startListening() {
     if (ctl) { ctl.stop(); return; }
     stopSpeaking();
-    el.mic.classList.add('listening'); el.mic.setAttribute('aria-pressed', 'true');
-    ctl = listen({
-      onResult: (text) => { el.input.value = `${el.input.value} ${text}`.trim(); if (isVoiceMode()) send(); },
-      onError: () => showToast('Could not hear you. Check microphone permission and try again.', 'warn'),
-      onEnd: () => { ctl = null; el.mic.classList.remove('listening'); el.mic.setAttribute('aria-pressed', 'false'); if (!isVoiceMode()) el.input.focus(); },
+    hideTranscriptPreview();
+    el.mic.classList.add('listening');
+    el.mic.setAttribute('aria-pressed', 'true');
+    el.mic.setAttribute('aria-label', 'Stop listening');
+
+    ctl = startDictation({
+      onInterim: (text) => {
+        showTranscriptPreview(text);
+      },
+      onResult: (text) => {
+        el.input.value = `${el.input.value} ${text}`.trim();
+        hideTranscriptPreview();
+        if (isVoiceMode()) send();
+      },
+      onError: (message, error) => {
+        hideTranscriptPreview();
+        if (error === 'not-allowed' || error === 'permission-denied') {
+          showToast(message, 'error');
+        } else if (error === 'no-speech') {
+          showRetryToast(message);
+        } else if (error === 'network') {
+          showRetryToast(message);
+        } else {
+          showRetryToast(message);
+        }
+      },
+      onTimeout: () => {
+        hideTranscriptPreview();
+        showRetryToast('Listening timed out. Tap to try again.');
+      },
+      onEnd: () => {
+        ctl = null;
+        el.mic.classList.remove('listening');
+        el.mic.setAttribute('aria-pressed', 'false');
+        el.mic.setAttribute('aria-label', 'Speak your question');
+        hideTranscriptPreview();
+        if (!isVoiceMode()) el.input.focus();
+      },
+      timeoutMs: 30000,
+      continuous: false
     });
+  }
+
+  el.mic.addEventListener('click', startListening);
+
+  // Keyboard support: Space/Enter to toggle
+  el.mic.addEventListener('keydown', (e) => {
+    if (e.key === ' ' || e.key === 'Enter') {
+      e.preventDefault();
+      startListening();
+    }
   });
 }
 

@@ -1,7 +1,7 @@
 
-from clinical_rules.base_rule import BaseRule
-from models.clinical import ClinicalFinding, ClinicalContext
-from models.safety import EvidenceAttribution
+from .base_rule import BaseRule
+from ..models.clinical import ClinicalFinding, ClinicalContext
+from ..models.safety import EvidenceAttribution
 
 class InteractionRule(BaseRule):
     def evaluate(self, context: ClinicalContext) -> ClinicalFinding:

@@ -6,6 +6,7 @@ import { escapeHtml as h } from '../utils/helpers.js';
 import { STORES } from '../config.js';
 import { SLOTS } from '../data/medicineDB.js';
 import { t, currentLang } from '../i18n.js';
+import * as backend from '../services/backend.js';
 
 const TIER_KEY = { routine: 'tierRoutine', care: 'tierCare', prescription: 'tierRx' };
 
@@ -132,7 +133,7 @@ function alternativesTable(m) {
 }
 
 /** FR-2.1–2.6 */
-export function renderMedicine(m, age = 'adult') {
+export function renderMedicine(m, age = 'adult', assessment = null) {
   if (!m) return '';
   return `<article class="med-card tier-${m.tier}" aria-labelledby="medTitle">
     <header class="med-head">
@@ -158,6 +159,7 @@ export function renderMedicine(m, age = 'adult') {
     ${m.cautions?.length ? `<section class="cautions" aria-label="Precautions"><h4><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> ${h(t('important'))}</h4>
       <ul>${m.cautions.map((c) => `<li>${termify(c)}</li>`).join('')}</ul></section>` : ''}
     ${alternativesTable(m)}
+    ${renderDosageCharts(m, assessment)}
     <div class="med-actions">
       <button type="button" class="btn-secondary" data-ask="${m.id}"><i class="fas fa-comment-medical" aria-hidden="true"></i> ${h(t('askAbout'))} ${h(m.name)}</button>
       <button type="button" class="btn-secondary" data-listen="${m.id}"><i class="fas fa-volume-up" aria-hidden="true"></i> ${h(t('listen'))}</button>
@@ -172,6 +174,135 @@ export function renderStoreLinks(med, fallbackQuery = '') {
   return allowed.map((s) => `<a class="store-btn" href="${h(s.url(q))}" target="_blank" rel="noopener noreferrer">
     <i class="fas ${s.icon}" aria-hidden="true"></i> ${h(s.name)}<i class="fas fa-arrow-up-right-from-square ext" aria-hidden="true"></i>
     <span class="sr-only">(opens in a new tab)</span></a>`).join('');
+}
+
+/** FR-3: Dosage Charts - Adult, Pediatric, Daily Exposure */
+export function renderDosageCharts(m, assessment = null) {
+  if (!m) return '';
+
+  const safeMin = m.safe_min ?? 0;
+  const safeMax = m.safe_max ?? 0;
+  const pediatricMax = m.pediatric_max ?? 0;
+  const mgPerKgMax = m.mg_per_kg_max ?? 0;
+
+  const evidenceSource = m.sourceName || 'Unknown';
+  const confidenceScore = m.confidenceScore ?? 0;
+  const evidenceTier = m.evidenceTier ?? 0;
+
+  // Adult Dosage Chart
+  const adultChart = `
+    <div class="dosage-chart adult-chart" aria-label="Adult dosage chart">
+      <h5><i class="fas fa-user" aria-hidden="true"></i> Adult Dosage Range</h5>
+      <div class="chart-bar-wrapper">
+        <div class="chart-bar adult-bar" role="img" aria-label="Adult dosage range from ${safeMin} to ${safeMax} mg">
+          <div class="chart-marker min-marker" style="left: 0%" aria-label="Minimum safe dose: ${safeMin} mg"></div>
+          <div class="chart-range" style="left: 0%; width: 100%"></div>
+          <div class="chart-marker max-marker" style="right: 0%" aria-label="Maximum safe dose: ${safeMax} mg"></div>
+        </div>
+        <div class="chart-labels">
+          <span class="label-min">Min: ${safeMin} mg</span>
+          <span class="label-max">Max: ${safeMax} mg</span>
+        </div>
+      </div>
+    </div>
+  `;
+
+  // Pediatric Dosage Chart
+  const pediatricChart = pediatricMax > 0 || mgPerKgMax > 0 ? `
+    <div class="dosage-chart pediatric-chart" aria-label="Pediatric dosage chart">
+      <h5><i class="fas fa-child" aria-hidden="true"></i> Pediatric Dosage Guidance</h5>
+      <div class="chart-bar-wrapper">
+        <div class="chart-bar pediatric-bar" role="img" aria-label="Pediatric dosage range up to ${pediatricMax} mg">
+          <div class="chart-marker min-marker" style="left: 0%"></div>
+          <div class="chart-range" style="left: 0%; width: ${pediatricMax > 0 ? Math.min(100, (pediatricMax / (safeMax || 1)) * 100) : 0}%"></div>
+          <div class="chart-marker max-marker" style="right: 0%"></div>
+        </div>
+        <div class="chart-labels">
+          <span class="label-min">Min: 0 mg</span>
+          <span class="label-max">Max: ${pediatricMax} mg</span>
+        </div>
+      </div>
+      ${mgPerKgMax > 0 ? `<p class="mg-kg-guidance"><i class="fas fa-weight-scale" aria-hidden="true"></i> Weight-based: up to ${mgPerKgMax} mg/kg</p>` : ''}
+    </div>
+  ` : '';
+
+  // Daily Exposure Chart (if assessment provided)
+  let exposureChart = '';
+  if (assessment) {
+    const riskLevel = assessment.risk_level || 'INFORMATIONAL';
+    const dailyExposure = assessment.daily_exposure || 0;
+    const referenceMax = assessment.reference_max || safeMax;
+    const percentOfMax = referenceMax > 0 ? Math.min(100, (dailyExposure / referenceMax) * 100) : 0;
+
+    const riskColors = {
+      'INFORMATIONAL': 'var(--good)',
+      'CAUTION': 'var(--warn)',
+      'ELEVATED_RISK': 'var(--warn)',
+      'CRITICAL_REVIEW_REQUIRED': 'var(--bad)'
+    };
+    const riskColor = riskColors[riskLevel] || 'var(--good)';
+    const riskLabels = {
+      'INFORMATIONAL': 'Safe',
+      'CAUTION': 'Caution',
+      'ELEVATED_RISK': 'Elevated Risk',
+      'CRITICAL_REVIEW_REQUIRED': 'Critical Review Required'
+    };
+    const riskLabel = riskLabels[riskLevel] || 'Unknown';
+
+    exposureChart = `
+      <div class="dosage-chart exposure-chart" aria-label="Daily exposure chart">
+        <h5><i class="fas fa-chart-line" aria-hidden="true"></i> Daily Exposure Assessment</h5>
+        <div class="exposure-summary">
+          <div class="exposure-value" style="color: ${riskColor}">${dailyExposure.toFixed(1)} mg/day</div>
+          <div class="exposure-risk" style="background: ${riskColor}">${riskLabel}</div>
+        </div>
+        <div class="chart-bar-wrapper">
+          <div class="chart-bar exposure-bar" role="img" aria-label="Daily exposure ${dailyExposure.toFixed(1)} mg of ${referenceMax} mg maximum">
+            <div class="chart-range exposure-fill" style="width: ${percentOfMax}%; background: ${riskColor}"></div>
+            <div class="chart-marker threshold-marker" style="left: ${Math.min(100, (referenceMax / (safeMax || 1)) * 100)}%" aria-label="Maximum safe: ${referenceMax} mg"></div>
+          </div>
+          <div class="chart-labels">
+            <span class="label-min">0 mg</span>
+            <span class="label-max">${referenceMax} mg</span>
+          </div>
+        </div>
+        <p class="exposure-details">
+          <span>Dose: ${assessment.dosage || 0} mg</span>
+          <span>Frequency: ${assessment.frequency || 'OD'}</span>
+          <span>Daily multiplier: ${assessment.daily_multiplier || 1}x</span>
+        </p>
+      </div>
+    `;
+  }
+
+  // Evidence attribution
+  const evidenceHtml = `
+    <div class="dosage-evidence" aria-label="Evidence attribution">
+      <h5><i class="fas fa-book-medical" aria-hidden="true"></i> Evidence Source</h5>
+      <div class="evidence-row">
+        <span class="evidence-label">Source:</span>
+        <span class="evidence-value">${h(evidenceSource)}</span>
+      </div>
+      <div class="evidence-row">
+        <span class="evidence-label">Confidence:</span>
+        <span class="evidence-value">${confidenceScore}%</span>
+      </div>
+      <div class="evidence-row">
+        <span class="evidence-label">Evidence Tier:</span>
+        <span class="evidence-value">Tier ${evidenceTier}</span>
+      </div>
+    </div>
+  `;
+
+  return `<section class="dosage-charts" aria-labelledby="chartsTitle">
+    <h4 id="chartsTitle"><i class="fas fa-chart-bar" aria-hidden="true"></i> Dosage Safety Charts</h4>
+    <div class="charts-grid">
+      ${adultChart}
+      ${pediatricChart}
+      ${exposureChart}
+    </div>
+    ${evidenceHtml}
+  </section>`;
 }
 
 /** One delegated listener set for the whole detail panel (no inline handlers, NFR-3.5). */

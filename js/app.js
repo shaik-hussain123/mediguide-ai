@@ -14,17 +14,52 @@ import { initScanners } from './components/scanner.js';
 import { initAdmin } from './components/admin.js';
 import { initReminders } from './components/reminders.js';
 import { initAppointments } from './components/appointments.js';
+import { initClinicFinder, destroyClinicFinder } from './components/clinicFinder.js';
+import { initMedicationTracker } from './components/medicationTracker.js';
 import { speak, stopSpeaking, plainText } from './services/voice.js';
 
 const state = { query: '', category: '', company: '', selectedId: null, age: 'adult' };
-const PAGES = ['pageMedicine', 'pageScanner', 'pagePrescription', 'pageCare', 'pageReminders'];
+const PAGES = ['pageMedicine', 'pageScanner', 'pagePrescription', 'pageCare', 'pageReminders', 'pageClinic', 'pageTracker'];
 let search;
 
-function refresh() {
+async function refresh() {
   const results = db.search(state.query, { category: state.category, company: state.company });
   if (!results.some((m) => m.id === state.selectedId)) state.selectedId = results[0]?.id ?? null;   // data-flow step 2
   const med = db.getById(state.selectedId);
-  $('#medDetail').innerHTML = renderResults(results, state.selectedId, state.query) + renderMedicine(med, state.age);
+
+  // Fetch safety assessment for dosage charts if backend is online
+  let assessment = null;
+  if (med && backend.isOnline()) {
+    try {
+      // Build a basic dosage request from the medicine's default dose/frequency
+      const doseMatch = (med.dose || '').match(/(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|units?)/i);
+      const dose = doseMatch ? parseFloat(doseMatch[1]) : (med.mg || 0);
+      const freq = med.frequency || 'OD';
+
+      // Try to get patient profile for more accurate assessment
+      const u = backend.getUser();
+      let patient = null;
+      if (u?.profile) {
+        patient = {
+          age: u.profile.age || null,
+          weight: u.profile.weight || null,
+          conditions: u.profile.conditions ? u.profile.conditions.split(',').map(s => s.trim()) : [],
+          pregnant: u.profile.pregnant || false
+        };
+      }
+
+      const response = await backend.api('/api/safety/dosage-check', {
+        method: 'POST',
+        body: { med_id: med.id, dosage: dose, frequency: freq, patient }
+      });
+      assessment = response;
+    } catch (e) {
+      // Silently fail - charts will render without assessment
+      console.debug('Could not fetch safety assessment for charts:', e);
+    }
+  }
+
+  $('#medDetail').innerHTML = renderResults(results, state.selectedId, state.query) + renderMedicine(med, state.age, assessment);
   $('#globalStoreLinks').innerHTML = renderStoreLinks(med, state.query);
   $('#medicineCount').textContent = db.getAll().length;
   renderCompanies(state.company);
@@ -96,6 +131,8 @@ async function boot() {
   initInstall();
   initReminders();
   initAppointments();
+  initClinicFinder();
+  initMedicationTracker();
 
   $('#dismissBanner').addEventListener('click', () => { $('#disclaimerBanner').hidden = true; });
   search = initSearch({
@@ -123,6 +160,25 @@ async function boot() {
   if ('serviceWorker' in navigator && location.protocol.startsWith('http')) {
     navigator.serviceWorker.register('sw.js').catch(() => { /* offline support is optional */ });   // NFR-6.3
   }
+
+  // Initialize clinic finder when clinic tab is activated
+  document.addEventListener('mg:goto-tab', (e) => {
+    if (e.detail === 'pageClinic') {
+      initClinicFinder();
+    }
+    if (e.detail === 'pageTracker') {
+      initMedicationTracker();
+    }
+  });
+
+  // Clean up clinic finder when leaving the page
+  const originalActivateTab = activateTab;
+  activateTab = (pageId) => {
+    if (pageId !== 'pageClinic') {
+      destroyClinicFinder();
+    }
+    originalActivateTab(pageId);
+  };
 }
 
 boot();

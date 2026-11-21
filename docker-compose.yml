@@ -1,0 +1,98 @@
+# MediGuide AI - Production Deployment Configuration
+# Use this for local development or deploy to production with proper secrets
+
+version: "3.9"
+
+services:
+  # MongoDB Database
+  mongodb:
+    image: mongo:7.0
+    container_name: mediguide-mongodb
+    restart: unless-stopped
+    environment:
+      MONGO_INITDB_ROOT_USERNAME: ${MONGO_ROOT_USERNAME:-admin}
+      MONGO_INITDB_ROOT_PASSWORD: ${MONGO_ROOT_PASSWORD:-change_me_in_production}
+      MONGO_INITDB_DATABASE: ${DATABASE_NAME:-mediguide_db}
+    volumes:
+      - mongodb_data:/data/db
+      - ./scripts/seed_database.py:/docker-entrypoint-initdb.d/seed_database.py:ro
+    ports:
+      - "27017:27017"
+    networks:
+      - mediguide-network
+    healthcheck:
+      test: ["CMD-SHELL", "mongosh --eval 'db.adminCommand(\"ping\")' > /dev/null 2>&1 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 5
+      start_period: 30s
+
+  # FastAPI Backend
+  backend:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    container_name: mediguide-backend
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      MONGODB_URL: mongodb://admin:${MONGO_ROOT_PASSWORD}@mongodb:27017/${DATABASE_NAME}?authSource=admin
+    depends_on:
+      mongodb:
+        condition: service_healthy
+    volumes:
+      - ./uploads:/app/uploads
+      - ./backend/utils:/app/backend/utils
+    ports:
+      - "8000:8000"
+    networks:
+      - mediguide-network
+    expose:
+      - "8000"
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    log_driver: json-file
+    log_options:
+      max-size: 10m
+      max-file: "3"
+
+  # Nginx Frontend Server
+  frontend:
+    build:
+      context: .
+      dockerfile: Dockerfile.frontend
+    container_name: mediguide-frontend
+    restart: unless-stopped
+    depends_on:
+      backend:
+        condition: service_started
+    ports:
+      - "80:80"
+      - "443:443"
+    networks:
+      - mediguide-network
+    volumes:
+      - ./uploads:/usr/share/nginx/html/uploads:ro
+      - nginx_cache:/var/cache/nginx
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    log_driver: json-file
+    log_options:
+      max-size: 10m
+      max-file: "3"
+
+volumes:
+  mongodb_data:
+  nginx_cache:
+
+networks:
+  mediguide-network:
+    driver: bridge

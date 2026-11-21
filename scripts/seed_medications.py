@@ -15,7 +15,7 @@ DATABASE_NAME = os.getenv("DATABASE_NAME", "mediguide_db")
 
 async def load_medications():
     """Load medications from JSON file."""
-    json_path = os.path.join(os.path.dirname(__file__), "..", "data", "medications_100.json")
+    json_path = os.path.join(os.path.dirname(__file__), "..", "data", "medications_500.json")
     with open(json_path, "r", encoding="utf-8") as f:
         return json.load(f)
 

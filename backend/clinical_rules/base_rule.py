@@ -1,5 +1,5 @@
 from abc import ABC, abstractmethod
-from models.clinical import ClinicalFinding, ClinicalContext
+from ..models.clinical import ClinicalFinding, ClinicalContext
 
 class BaseRule(ABC):
     @abstractmethod

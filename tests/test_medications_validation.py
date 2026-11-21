@@ -18,14 +18,14 @@ class TestMedicationDataset(unittest.IsolatedAsyncioTestCase):
         self.collection = self.db["medications"]
 
     async def test_json_file_exists_and_loads(self):
-        json_path = os.path.join(os.getcwd(), 'data', 'medications_100.json')
+        json_path = os.path.join(os.getcwd(), 'data', 'medications_500.json')
         self.assertTrue(os.path.exists(json_path))
         with open(json_path, 'r', encoding='utf-8') as f:
             data = json.load(f)
-        self.assertEqual(len(data), 100)
+        self.assertEqual(len(data), 500)
 
     async def test_all_medications_have_required_fields(self):
-        json_path = os.path.join(os.getcwd(), 'data', 'medications_100.json')
+        json_path = os.path.join(os.getcwd(), 'data', 'medications_500.json')
         with open(json_path, 'r', encoding='utf-8') as f:
             medications = json.load(f)
 
@@ -41,7 +41,7 @@ class TestMedicationDataset(unittest.IsolatedAsyncioTestCase):
                 self.assertIn(field, med, f"Medication {med.get('name', 'Unknown')} missing field: {field}")
 
     async def test_pregnancy_categories_valid(self):
-        json_path = os.path.join(os.getcwd(), 'data', 'medications_100.json')
+        json_path = os.path.join(os.getcwd(), 'data', 'medications_500.json')
         with open(json_path, 'r', encoding='utf-8') as f:
             medications = json.load(f)
 
@@ -51,7 +51,7 @@ class TestMedicationDataset(unittest.IsolatedAsyncioTestCase):
                          f"Medication {med['name']} has invalid pregnancy_category: {med['pregnancy_category']}")
 
     async def test_evidence_tiers_valid(self):
-        json_path = os.path.join(os.getcwd(), 'data', 'medications_100.json')
+        json_path = os.path.join(os.getcwd(), 'data', 'medications_500.json')
         with open(json_path, 'r', encoding='utf-8') as f:
             medications = json.load(f)
 
@@ -60,7 +60,7 @@ class TestMedicationDataset(unittest.IsolatedAsyncioTestCase):
                            f"Medication {med['name']} has invalid evidenceTier: {med['evidenceTier']}")
 
     async def test_confidence_scores_valid(self):
-        json_path = os.path.join(os.getcwd(), 'data', 'medications_100.json')
+        json_path = os.path.join(os.getcwd(), 'data', 'medications_500.json')
         with open(json_path, 'r', encoding='utf-8') as f:
             medications = json.load(f)
 
@@ -69,7 +69,7 @@ class TestMedicationDataset(unittest.IsolatedAsyncioTestCase):
                            f"Medication {med['name']} has invalid confidenceScore: {med['confidenceScore']}")
 
     async def test_dosage_thresholds_logical(self):
-        json_path = os.path.join(os.getcwd(), 'data', 'medications_100.json')
+        json_path = os.path.join(os.getcwd(), 'data', 'medications_500.json')
         with open(json_path, 'r', encoding='utf-8') as f:
             medications = json.load(f)
 
@@ -79,7 +79,7 @@ class TestMedicationDataset(unittest.IsolatedAsyncioTestCase):
 
     async def test_database_seeded_correctly(self):
         count = await self.collection.count_documents({})
-        self.assertEqual(count, 100, f"Expected 100 medications in database, found {count}")
+        self.assertEqual(count, 500, f"Expected 500 medications in database, found {count}")
 
     async def test_database_indexes_exist(self):
         indexes = await self.collection.index_information()

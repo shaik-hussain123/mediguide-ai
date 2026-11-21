@@ -1,0 +1,96 @@
+# Docker build context - exclude unnecessary files
+
+# Python
+__pycache__
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+.venv/
+pip-log.txt
+pip-delete-this-directory.txt
+.eggs/
+*.egg-info/
+dist/
+build/
+
+# Version control
+.git
+.gitignore
+.gitattributes
+.gitmodules
+.hg
+.svn
+
+# Node.js
+node_modules/
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+package-lock.json
+yarn.lock
+.pnpm-debug.log
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+.project
+.pydevproject
+.settings/
+
+# OS files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+
+# Test files
+tests/
+test/
+__tests__/
+coverage/
+*.test.js
+*.spec.js
+
+# Documentation (except README)
+docs/
+*.md
+!.README.md
+
+# Build artifacts
+*.log
+*.tmp
+*.temp
+
+# Environment files (keep .env.production.example)
+.env
+.env.*
+!.env.production.example
+
+# Upload directories (mounted as volumes)
+uploads/
+backend/uploads/
+
+# Data directories
+data/*.json
+!.data/medications_500.json
+
+# Keep required files
+!backend/requirements.txt
+!backend/main.py
+!backend/database.py
+!backend/
+!scripts/
+!index.html
+!css/
+!js/
+!manifest.json
+!sw.js

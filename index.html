@@ -19,6 +19,12 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap"
         rel="stylesheet" />
 
+    <!-- Leaflet for maps -->
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
+        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
+        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+
     <!-- App Styles -->
     <link rel="stylesheet" href="css/style.css" />
     <link rel="stylesheet" href="css/components.css" />
@@ -114,6 +120,12 @@
             </button>
             <button class="page-tab" id="tabReminders" role="tab" aria-selected="false" aria-controls="pageReminders" data-page="pageReminders">
                 <i class="fas fa-bell" aria-hidden="true"></i> <span data-i18n="tabReminders">Reminders</span>
+            </button>
+            <button class="page-tab" id="tabClinic" role="tab" aria-selected="false" aria-controls="pageClinic" data-page="pageClinic">
+                <i class="fas fa-clinic-medical" aria-hidden="true"></i> <span data-i18n="tabClinic">Nearby Clinics</span>
+            </button>
+            <button class="page-tab" id="tabTracker" role="tab" aria-selected="false" aria-controls="pageTracker" data-page="pageTracker">
+                <i class="fas fa-pills" aria-hidden="true"></i> <span data-i18n="tabTracker">Medication Tracker</span>
             </button>
         </div>
 
@@ -484,6 +496,102 @@
             </div>
         </section>
 
+        <!-- ========== NEARBY CLINIC FINDER PAGE ========== -->
+        <section class="page-section" id="pageClinic" hidden aria-label="Nearby clinic finder">
+            <div class="page-section-header">
+                <div class="page-section-title">
+                    <i class="fas fa-clinic-medical" aria-hidden="true"></i> <span data-i18n="clinicTitle">Nearby Healthcare Finder</span>
+                </div>
+                <p class="page-section-desc" data-i18n="clinicDesc">Find clinics, hospitals, pharmacies, and emergency care near you. Uses OpenStreetMap data.</p>
+            </div>
+
+            <div class="clinic-finder-grid">
+                <!-- Controls panel -->
+                <div class="card clinic-controls">
+                    <div class="card-title">
+                        <i class="fas fa-search-location" aria-hidden="true"></i> <span data-i18n="facilityType">Search Settings</span>
+                    </div>
+
+                    <!-- Location display -->
+                    <div class="form-group">
+                        <label for="currentLocation"><i class="fas fa-map-marker-alt" aria-hidden="true"></i> <span data-i18n="currentLocation">Current Location</span></label>
+                        <div class="location-display" id="currentLocation" aria-live="polite" data-i18n="notSet">Not set</div>
+                    </div>
+
+                    <button type="button" class="btn-primary full" id="locateBtn">
+                        <i class="fas fa-crosshairs" aria-hidden="true"></i> <span data-i18n="findMyLocation">Find My Location</span>
+                    </button>
+
+                    <!-- Facility type filter -->
+                    <div class="form-group">
+                        <label><i class="fas fa-filter" aria-hidden="true"></i> <span data-i18n="facilityType">Facility Type</span></label>
+                        <div class="type-chips" id="typeFilter" role="radiogroup" aria-label="Healthcare facility type"></div>
+                    </div>
+
+                    <!-- Radius selector -->
+                    <div class="form-group">
+                        <label for="radiusSelect"><i class="fas fa-ruler-combined" aria-hidden="true"></i> <span data-i18n="searchRadius">Search Radius</span></label>
+                        <select id="radiusSelect" aria-label="Search radius in kilometers"></select>
+                    </div>
+
+                    <button type="button" class="btn-secondary full" id="searchClinicsBtn">
+                        <i class="fas fa-search" aria-hidden="true"></i> <span data-i18n="searchNearby">Search Nearby</span>
+                    </button>
+                </div>
+
+                <!-- Results panel -->
+                <div class="card clinic-results">
+                    <div class="card-title">
+                        <i class="fas fa-list" aria-hidden="true"></i> <span data-i18n="results">Results</span>
+                        <span class="results-count" id="resultsCount" aria-live="polite"></span>
+                    </div>
+
+                    <div class="clinic-list" id="clinicList" role="list" aria-label="Nearby facilities">
+                        <div class="map-placeholder">
+                            <i class="fas fa-map-marker-alt" aria-hidden="true"></i>
+                            <p data-i18n="clickToStart">Click "Find My Location" to start searching</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Map panel -->
+                <div class="card clinic-map-card">
+                    <div class="card-title">
+                        <i class="fas fa-map" aria-hidden="true"></i> <span data-i18n="mapView">Map View</span>
+                    </div>
+                    <div id="clinicMap" class="clinic-map" role="application" aria-label="Map of nearby healthcare facilities"></div>
+                </div>
+            </div>
+
+            <div class="clinic-disclaimer">
+                <i class="fas fa-info-circle" aria-hidden="true"></i>
+                <strong><span data-i18n="disclaimerLabel">Disclaimer:</span></strong> <span data-i18n="clinicDisclaimer">This tool uses OpenStreetMap data and is for informational purposes only. Facility information may be outdated or incomplete. Always verify details independently. In an emergency, call 112 immediately.</span>
+            </div>
+        </section>
+
+        <!-- ========== MEDICATION TRACKER PAGE ========== -->
+        <section class="page-section" id="pageTracker" hidden aria-label="Medication tracker">
+            <div class="page-section-header">
+                <div class="page-section-title">
+                    <i class="fas fa-pills" aria-hidden="true"></i> <span data-i18n="trackerTitle">Medication Tracker</span>
+                </div>
+                <p class="page-section-desc" data-i18n="trackerDesc">Manage your medication schedules, log doses, and track adherence.</p>
+            </div>
+
+            <div class="tracker-header">
+                <button type="button" class="btn-primary" id="addScheduleBtn">
+                    <i class="fas fa-plus" aria-hidden="true"></i> <span data-i18n="addSchedule">Add Schedule</span>
+                </button>
+            </div>
+
+            <div class="card">
+                <div class="card-title">
+                    <i class="fas fa-calendar-check" aria-hidden="true"></i> <span data-i18n="mySchedules">My Schedules</span>
+                </div>
+                <div id="scheduleList" role="list" aria-label="Medication schedules"></div>
+            </div>
+        </section>
+
 
         <footer class="footer-note" role="contentinfo">
             <span><i class="fas fa-lock" aria-hidden="true"></i> TLS Encrypted</span>
@@ -749,6 +857,133 @@
                     <div class="profile-info-row"><span>Standard</span><span>CDSCO · HIPAA-Ready · WCAG 2.1</span></div>
                     <div class="profile-info-row"><span>Data source</span><span>Curated CDSCO dataset</span></div>
                     <div class="profile-info-row"><span>AI provider</span><span>Google Gemini (model configurable)</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== SCHEDULE MODAL ========== -->
+    <div class="modal-overlay" id="scheduleModal" role="dialog" aria-modal="true" aria-labelledby="scheduleModalTitle" hidden>
+        <div class="modal" style="max-width:520px;">
+            <div class="modal-header">
+                <div class="modal-title" id="scheduleModalTitle">
+                    <i class="fas fa-calendar-plus" aria-hidden="true"></i> <span data-i18n="addSchedule">Add Schedule</span>
+                </div>
+                <button class="modal-close" data-modal="scheduleModal" aria-label="Close schedule modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="scheduleForm">
+                    <input type="hidden" id="scheduleId" />
+                    <div class="form-group">
+                        <label for="scheduleMedicine"><i class="fas fa-pills" aria-hidden="true"></i> <span data-i18n="medicineName">Medicine</span></label>
+                        <select id="scheduleMedicine" required>
+                            <option value="">Select a medicine</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleDosage"><i class="fas fa-weight" aria-hidden="true"></i> <span data-i18n="dosage">Dosage</span></label>
+                        <input type="text" id="scheduleDosage" placeholder="e.g., 500mg" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleTimes"><i class="fas fa-clock" aria-hidden="true"></i> <span data-i18n="timesLbl">Times (comma separated)</span></label>
+                        <input type="text" id="scheduleTimes" placeholder="08:00, 14:00, 20:00, 22:00" required />
+                        <small class="form-hint">Enter times in 24-hour format, separated by commas</small>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleDays"><i class="fas fa-calendar-alt" aria-hidden="true"></i> <span data-i18n="daysLbl">Days (0=Sun, 6=Sat)</span></label>
+                        <input type="text" id="scheduleDays" placeholder="0,1,2,3,4,5,6" value="0,1,2,3,4,5,6" />
+                        <small class="form-hint">Comma-separated day numbers. Default: all days</small>
+                    </div>
+                    <div class="form-row-2">
+                        <div class="form-group">
+                            <label for="scheduleStartDate"><i class="fas fa-calendar-day" aria-hidden="true"></i> <span data-i18n="startDate">Start Date</span></label>
+                            <input type="date" id="scheduleStartDate" required />
+                        </div>
+                        <div class="form-group">
+                            <label for="scheduleEndDate"><i class="fas fa-calendar-day" aria-hidden="true"></i> <span data-i18n="endDate">End Date (optional)</span></label>
+                            <input type="date" id="scheduleEndDate" />
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label for="scheduleNotes"><i class="fas fa-sticky-note" aria-hidden="true"></i> <span data-i18n="notes">Notes</span></label>
+                        <textarea id="scheduleNotes" rows="2" placeholder="Any special instructions..."></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-secondary" data-modal-close="scheduleModal"><span data-i18n="cancel">Cancel</span></button>
+                        <button type="submit" class="btn-primary"><i class="fas fa-save" aria-hidden="true"></i> <span data-i18n="saveSchedule">Save Schedule</span></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== QUICK LOG MODAL ========== -->
+    <div class="modal-overlay" id="quickLogModal" role="dialog" aria-modal="true" aria-labelledby="quickLogModalTitle" hidden>
+        <div class="modal" style="max-width:420px;">
+            <div class="modal-header">
+                <div class="modal-title" id="quickLogModalTitle">
+                    <i class="fas fa-pill" aria-hidden="true"></i> <span data-i18n="logDose">Log Dose</span>
+                </div>
+                <button class="modal-close" data-modal="quickLogModal" aria-label="Close log modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <form id="quickLogForm">
+                    <div class="form-group">
+                        <label for="quickLogStatus"><i class="fas fa-clipboard-check" aria-hidden="true"></i> <span data-i18n="status">Status</span></label>
+                        <select id="quickLogStatus" required>
+                            <option value="taken" data-i18n="taken">Taken</option>
+                            <option value="skipped" data-i18n="skipped">Skipped</option>
+                            <option value="missed" data-i18n="missed">Missed</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label for="quickLogTime"><i class="fas fa-clock" aria-hidden="true"></i> <span data-i18n="time">Time</span></label>
+                        <input type="time" id="quickLogTime" required />
+                    </div>
+                    <div class="form-group">
+                        <label for="quickLogNotes"><i class="fas fa-sticky-note" aria-hidden="true"></i> <span data-i18n="notes">Notes (optional)</span></label>
+                        <textarea id="quickLogNotes" rows="2" placeholder="Any notes..."></textarea>
+                    </div>
+                    <div class="modal-actions">
+                        <button type="button" class="btn-secondary" data-modal-close="quickLogModal"><span data-i18n="cancel">Cancel</span></button>
+                        <button type="submit" class="btn-primary"><i class="fas fa-save" aria-hidden="true"></i> <span data-i18n="logDose">Log Dose</span></button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- ========== SCHEDULE DETAIL MODAL ========== -->
+    <div class="modal-overlay" id="scheduleDetailModal" role="dialog" aria-modal="true" aria-labelledby="scheduleDetailModalTitle" hidden>
+        <div class="modal" style="max-width:600px;">
+            <div class="modal-header">
+                <div class="modal-title" id="scheduleDetailModalTitle">
+                    <i class="fas fa-calendar-alt" aria-hidden="true"></i> <span data-i18n="scheduleDetails">Schedule Details</span>
+                </div>
+                <button class="modal-close" data-modal="scheduleDetailModal" aria-label="Close detail modal">
+                    <i class="fas fa-times" aria-hidden="true"></i>
+                </button>
+            </div>
+            <div class="modal-body">
+                <div id="scheduleDetailInfo" class="schedule-detail-info"></div>
+                <div class="card" style="margin-top: 16px;">
+                    <div class="card-title">
+                        <i class="fas fa-chart-pie" aria-hidden="true"></i> <span data-i18n="adherence">30-Day Adherence</span>
+                    </div>
+                    <div class="adherence-container" id="adherenceContainer">
+                        <div id="adherenceSummary" class="adherence-summary"></div>
+                        <div id="adherenceChart" class="adherence-chart"></div>
+                    </div>
+                </div>
+                <div class="card" style="margin-top: 16px;">
+                    <div class="card-title">
+                        <i class="fas fa-history" aria-hidden="true"></i> <span data-i18n="recentLogs">Recent Logs</span>
+                    </div>
+                    <div id="scheduleLogsList" class="logs-list"></div>
                 </div>
             </div>
         </div>

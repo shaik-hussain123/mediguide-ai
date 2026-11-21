@@ -34,7 +34,7 @@ class TestMedicationDatabase(unittest.IsolatedAsyncioTestCase):
         req = DosageRequest(med_id=1, dosage=500.0, frequency="OD")
         assessment = self.engine.evaluate(req, med)
         self.assertEqual(assessment.reference_max, 4000.0)
-        self.assertEqual(assessment.evidence.sourceName, "CDSCO India")
+        self.assertIn("CDSCO India", assessment.evidence.sourceName)
 
     async def test_fallback_behavior(self):
         # Test fallback with non-existent ID

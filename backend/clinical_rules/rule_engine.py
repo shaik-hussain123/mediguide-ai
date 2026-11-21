@@ -1,14 +1,14 @@
 from typing import List, Dict, Any
-from models.clinical import ClinicalFinding, ClinicalContext
-from clinical_rules.base_rule import BaseRule
-from clinical_rules.pediatric_rule import PediatricRule
-from clinical_rules.weight_rule import WeightRule
-from clinical_rules.elderly_rule import ElderlyRule
-from clinical_rules.pregnancy_rule import PregnancyRule
-from clinical_rules.renal_rule import RenalRule
-from clinical_rules.hepatic_rule import HepaticRule
-from clinical_rules.interaction_rule import InteractionRule
-from clinical_rules.source_conflict_rule import SourceConflictRule
+from ..models.clinical import ClinicalFinding, ClinicalContext
+from .base_rule import BaseRule
+from .pediatric_rule import PediatricRule
+from .weight_rule import WeightRule
+from .elderly_rule import ElderlyRule
+from .pregnancy_rule import PregnancyRule
+from .renal_rule import RenalRule
+from .hepatic_rule import HepaticRule
+from .interaction_rule import InteractionRule
+from .source_conflict_rule import SourceConflictRule
 
 class ClinicalRulesEngine:
     def __init__(self):
@@ -43,5 +43,5 @@ class ClinicalRulesEngine:
 
         return {
             "overallClinicalSeverity": highest_severity,
-            "findings": [f.dict() for f in findings]
+            "findings": [f.model_dump() for f in findings]
         }

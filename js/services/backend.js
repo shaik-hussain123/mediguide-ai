@@ -54,7 +54,10 @@ export const setUser = (u) => { user = u; emit(); };
 
 let refreshing = null;
 export function refresh() {
-  refreshing ||= fetch('/api/auth/refresh', { method: 'POST' }).then(async (r) => {
+  refreshing ||= fetch('/api/auth/refresh', {
+    method: 'POST',
+    headers: token ? { Authorization: `Bearer ${token}` } : {}
+  }).then(async (r) => {
     const data = await r.json().catch(() => ({}));
     if (!r.ok) { clearSession(); throw new ApiError(r.status, data.error || 'Session expired.'); }
     setSession(data); return data;

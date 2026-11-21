@@ -1,6 +1,6 @@
-from clinical_rules.base_rule import BaseRule
-from models.clinical import ClinicalFinding, ClinicalContext
-from models.safety import EvidenceAttribution
+from .base_rule import BaseRule
+from ..models.clinical import ClinicalFinding, ClinicalContext
+from ..models.safety import EvidenceAttribution
 
 class WeightRule(BaseRule):
     def evaluate(self, context: ClinicalContext) -> ClinicalFinding:

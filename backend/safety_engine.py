@@ -1,7 +1,7 @@
 from typing import Dict, Any, List
-from models.safety import DosageRequest, PatientProfile, DosageAssessment, EvidenceAttribution
-from clinical_rules.context import ClinicalContext
-from clinical_rules.rule_engine import ClinicalRulesEngine
+from .models.safety import DosageRequest, PatientProfile, DosageAssessment, EvidenceAttribution
+from .clinical_rules.context import ClinicalContext
+from .clinical_rules.rule_engine import ClinicalRulesEngine
 
 class DosageSafetyEngine:
     def __init__(self):

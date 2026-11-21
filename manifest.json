@@ -7,5 +7,36 @@
   "display": "standalone",
   "background_color": "#f1f6f9",
   "theme_color": "#0a6c8f",
-  "icons": [{ "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
+  "orientation": "portrait-primary",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" }
+  ],
+  "categories": ["medical", "health", "utilities"],
+  "shortcuts": [
+    {
+      "name": "Medication Tracker",
+      "short_name": "Tracker",
+      "description": "View and manage medication schedules",
+      "url": "./index.html#pageTracker",
+      "icons": [{ "src": "icons/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "Nearby Clinics",
+      "short_name": "Clinics",
+      "description": "Find healthcare facilities near you",
+      "url": "./index.html#pageClinic",
+      "icons": [{ "src": "icons/icon.svg", "sizes": "192x192" }]
+    },
+    {
+      "name": "MediChat",
+      "short_name": "Chat",
+      "description": "Ask the AI about medications",
+      "url": "./index.html#pageMedicine",
+      "icons": [{ "src": "icons/icon.svg", "sizes": "192x192" }]
+    }
+  ],
+  "screenshots": [],
+  "prefer_related_applications": false
 }

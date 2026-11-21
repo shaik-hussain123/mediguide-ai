@@ -1,6 +1,6 @@
 from pydantic import BaseModel
-from typing import Optional, List
-from models.safety import EvidenceAttribution
+from typing import Optional, List, Dict, Any
+from .safety import EvidenceAttribution
 
 class ClinicalFinding(BaseModel):
     ruleType: str

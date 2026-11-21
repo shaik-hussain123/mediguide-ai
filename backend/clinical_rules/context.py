@@ -1,6 +1,6 @@
 from typing import List, Dict, Any
-from models.safety import PatientProfile, DosageRequest, DosageAssessment, EvidenceAttribution
-from models.clinical import ClinicalContext
+from ..models.safety import PatientProfile, DosageRequest, DosageAssessment, EvidenceAttribution
+from ..models.clinical import ClinicalContext
 
 class ClinicalContext:
     def __init__(
