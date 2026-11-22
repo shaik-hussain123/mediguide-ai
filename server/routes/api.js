@@ -1,6 +1,6 @@
 /** Profile + ABHA, medicine uses, AI proxy, doctors/appointments (teleconsultation), reminders, admin. */
 import { get, all, run, transaction, now, audit, getSetting, setSetting, delSetting } from '../lib/db.js';
-import { seal, uuid, randomToken, hashPassword } from '../lib/security.js';
+import { seal, open, uuid, randomToken, sha256, hashPassword } from '../lib/security.js';
 import { HttpError, bad, rateLimit, str, optStr, int, EMAIL_RE } from '../lib/http.js';
 import { generate, aiReady, getModel } from '../lib/gemini.js';
 import { publicUser } from './auth.js';
@@ -113,6 +113,30 @@ const logOut = (l) => ({
   _id: l.id, schedule_id: l.schedule_id, scheduled_time: l.scheduled_time,
   status: l.status, notes: l.notes, logged_at: l.logged_at
 });
+function healthSummary(user) {
+  const from = new Date(Date.now() - 30 * 86400e3).toISOString();
+  const current = now();
+  const logs = all('SELECT status, COUNT(*) AS count FROM medication_logs WHERE user_id = ? AND scheduled_time >= ? AND scheduled_time <= ? GROUP BY status',
+    user.id, from, current);
+  const medicationCounts = { taken: 0, skipped: 0, missed: 0 };
+  logs.forEach((row) => { if (Object.hasOwn(medicationCounts, row.status)) medicationCounts[row.status] = row.count; });
+  const trackedDoses = Object.values(medicationCounts).reduce((total, count) => total + count, 0);
+  return {
+    profile: { age: user.age ?? '', weight: user.weight ?? '', conditions: user.conditions || '', allergies: user.allergies || '' },
+    periodDays: 30,
+    medications: {
+      activeSchedules: get('SELECT COUNT(*) AS n FROM medication_schedules WHERE user_id = ? AND active = 1', user.id).n,
+      ...medicationCounts,
+      trackedDoses,
+      adherencePercentage: trackedDoses ? Math.round((medicationCounts.taken / trackedDoses) * 100) : null,
+    },
+    appointments: {
+      upcoming: get("SELECT COUNT(*) AS n FROM appointments WHERE user_id = ? AND status = 'booked' AND start_at > ?", user.id, current).n,
+      completed: get("SELECT COUNT(*) AS n FROM appointments WHERE user_id = ? AND status = 'completed'", user.id).n,
+    },
+    activeReminders: get('SELECT COUNT(*) AS n FROM reminders WHERE user_id = ? AND active = 1', user.id).n,
+  };
+}
 const adverseOut = (e) => ({
   id: e.id, medication: e.medication, reaction: e.reaction, severity: e.severity,
   start_date: e.start_date, end_date: e.end_date, description: e.description,
@@ -128,9 +152,16 @@ const FACILITY_TYPES = {
   emergency: '["emergency"="yes"]'
 };
 const geocodeCache = new Map();
-const OVERPASS_URL = 'https://overpass-api.de/api/interpreter';
-const OVERPASS_BACKOFF_MS = [1000, 2000];
-const OVERPASS_RETRYABLE_STATUSES = new Set([429, 502, 503, 504]);
+const OVERPASS_ENDPOINTS = [
+  'https://overpass-api.de/api/interpreter',
+  'https://overpass.private.coffee/api/interpreter',
+];
+const OVERPASS_TIMEOUT_MS = 12000;
+const OVERPASS_COOLDOWN_MS = 60_000;
+const OVERPASS_RETRYABLE_STATUSES = new Set([406, 429, 500, 502, 503, 504]);
+const NEARBY_CACHE_TTL_MS = 5 * 60_000;
+const nearbyCache = new Map();
+let primaryOverpassCooldownUntil = 0;
 
 async function geocodeLocation(searchText) {
   const cacheKey = searchText.trim().toLowerCase();
@@ -163,8 +194,13 @@ async function geocodeLocation(searchText) {
 }
 
 async function fetchNearbyPlaces(latitude, longitude, radius, type) {
+  const cacheKey = `${latitude}:${longitude}:${radius}:${type}`;
+  const cached = nearbyCache.get(cacheKey);
+  if (cached && cached.expiresAt > Date.now()) return cached.places;
+  if (cached) nearbyCache.delete(cacheKey);
+
   const tag = FACILITY_TYPES[type];
-  const query = `[out:json][timeout:25];
+  const query = `[out:json][timeout:12];
     (
       node${tag}(around:${radius},${latitude},${longitude});
       way${tag}(around:${radius},${latitude},${longitude});
@@ -172,36 +208,43 @@ async function fetchNearbyPlaces(latitude, longitude, radius, type) {
     );
     out center;`;
 
-  let data;
-  for (let attempt = 0; attempt <= OVERPASS_BACKOFF_MS.length; attempt += 1) {
-    let response;
+  let data = null;
+  let lastFailure = 'No Overpass response.';
+  const endpoints = Date.now() < primaryOverpassCooldownUntil
+    ? [...OVERPASS_ENDPOINTS.slice(1), OVERPASS_ENDPOINTS[0]]
+    : OVERPASS_ENDPOINTS;
+  for (const endpoint of endpoints) {
     try {
-      response = await fetch(OVERPASS_URL, {
+      const response = await fetch(endpoint, {
         method: 'POST',
         headers: { 'User-Agent': 'MediGuide-AI/1.0', 'Content-Type': 'application/x-www-form-urlencoded', 'Accept': 'application/json' },
         body: new URLSearchParams({ data: query }),
-        signal: AbortSignal.timeout(30000),
+        signal: AbortSignal.timeout(OVERPASS_TIMEOUT_MS),
       });
-    } catch {
-      if (attempt === OVERPASS_BACKOFF_MS.length) {
-        throw new HttpError(502, 'Places service could not be reached after retries.');
+      if (!response.ok) {
+        if (!OVERPASS_RETRYABLE_STATUSES.has(response.status)) throw new HttpError(502, 'Places service rejected the search.');
+        lastFailure = `${new URL(endpoint).host} returned HTTP ${response.status}.`;
+        if (endpoint === OVERPASS_ENDPOINTS[0]) primaryOverpassCooldownUntil = Date.now() + OVERPASS_COOLDOWN_MS;
+        continue;
       }
-    }
-
-    if (response?.ok) {
-      data = await response.json().catch(() => null);
-      if (!data || !Array.isArray(data.elements)) {
-        throw new HttpError(502, 'Places service returned an invalid response.');
+      const result = await response.json().catch(() => null);
+      if (!result || !Array.isArray(result.elements)) {
+        lastFailure = `${new URL(endpoint).host} returned an invalid response.`;
+        if (endpoint === OVERPASS_ENDPOINTS[0]) primaryOverpassCooldownUntil = Date.now() + OVERPASS_COOLDOWN_MS;
+        continue;
       }
+      data = result;
+      if (endpoint === OVERPASS_ENDPOINTS[0]) primaryOverpassCooldownUntil = 0;
       break;
+    } catch (error) {
+      if (error instanceof HttpError) throw error;
+      lastFailure = `${new URL(endpoint).host} could not be reached.`;
+      if (endpoint === OVERPASS_ENDPOINTS[0]) primaryOverpassCooldownUntil = Date.now() + OVERPASS_COOLDOWN_MS;
     }
-    if (response && !OVERPASS_RETRYABLE_STATUSES.has(response.status)) {
-      throw new HttpError(502, 'Places service unavailable.');
-    }
-    if (attempt === OVERPASS_BACKOFF_MS.length) {
-      throw new HttpError(502, 'Nearby search is temporarily busy. Please wait a moment and try again.');
-    }
-    await new Promise((resolve) => setTimeout(resolve, OVERPASS_BACKOFF_MS[attempt]));
+  }
+  if (!data) {
+    console.warn(`Nearby search failed for all Overpass instances: ${lastFailure}`);
+    throw new HttpError(502, 'Nearby search is temporarily unavailable. Please try again shortly.');
   }
 
   // Calculate Haversine distance
@@ -242,6 +285,11 @@ async function fetchNearbyPlaces(latitude, longitude, radius, type) {
 
   // Sort by distance
   places.sort((a, b) => a.distance - b.distance);
+  if (nearbyCache.size >= 100) {
+    for (const [key, entry] of nearbyCache) if (entry.expiresAt <= Date.now()) nearbyCache.delete(key);
+    if (nearbyCache.size >= 100) nearbyCache.delete(nearbyCache.keys().next().value);
+  }
+  nearbyCache.set(cacheKey, { places, expiresAt: Date.now() + NEARBY_CACHE_TTL_MS });
   return places;
 }
 
@@ -263,7 +311,8 @@ export const apiRoutes = [
     const searchText = str(query.q, 'Location search', 2, 120);
     return { body: { results: await geocodeLocation(searchText) } };
   }],
-  ['GET', '/api/places/nearby', async ({ query }) => {
+  ['GET', '/api/places/nearby', async ({ req, query }) => {
+    rateLimit(`nearby:${ip(req)}`, 10);
     const latitude = Number(query.latitude);
     const longitude = Number(query.longitude);
     const radius = int(query.radius || 5000, 'Radius', 100, 50000);
@@ -360,28 +409,77 @@ export const apiRoutes = [
   }), { auth: 'user' }],
   ['GET', '/api/health/summary', ({ user }) => {
     if (user.role !== 'user') throw new HttpError(403, 'Patient accounts only.');
-    const from = new Date(Date.now() - 30 * 86400e3).toISOString();
-    const logs = all('SELECT status, COUNT(*) AS count FROM medication_logs WHERE user_id = ? AND scheduled_time >= ? AND scheduled_time <= ? GROUP BY status',
-      user.id, from, now());
-    const medicationCounts = { taken: 0, skipped: 0, missed: 0 };
-    logs.forEach((row) => { if (Object.hasOwn(medicationCounts, row.status)) medicationCounts[row.status] = row.count; });
-    const trackedDoses = Object.values(medicationCounts).reduce((total, count) => total + count, 0);
-    return { body: {
-      profile: { age: user.age ?? '', weight: user.weight ?? '', conditions: user.conditions || '', allergies: user.allergies || '' },
-      periodDays: 30,
-      medications: {
-        activeSchedules: get('SELECT COUNT(*) AS n FROM medication_schedules WHERE user_id = ? AND active = 1', user.id).n,
-        ...medicationCounts,
-        trackedDoses,
-        adherencePercentage: trackedDoses ? Math.round((medicationCounts.taken / trackedDoses) * 100) : null,
-      },
-      appointments: {
-        upcoming: get("SELECT COUNT(*) AS n FROM appointments WHERE user_id = ? AND status = 'booked' AND start_at > ?", user.id, now()).n,
-        completed: get("SELECT COUNT(*) AS n FROM appointments WHERE user_id = ? AND status = 'completed'", user.id).n,
-      },
-      activeReminders: get('SELECT COUNT(*) AS n FROM reminders WHERE user_id = ? AND active = 1', user.id).n,
-    } };
+    return { body: healthSummary(user) };
   }, { auth: 'user' }],
+  ['GET', '/api/health/report-shares', ({ user }) => {
+    if (user.role !== 'user') throw new HttpError(403, 'Patient accounts only.');
+    run('DELETE FROM report_shares WHERE user_id = ? AND expires_at <= ?', user.id, now());
+    return { body: { shares: all('SELECT id, created_at, expires_at, revoked_at FROM report_shares WHERE user_id = ? ORDER BY created_at DESC LIMIT 20', user.id) } };
+  }, { auth: 'user' }],
+  ['POST', '/api/health/report-shares', ({ user, body }) => {
+    if (user.role !== 'user') throw new HttpError(403, 'Patient accounts only.');
+    rateLimit(`report-share-create:${user.id}`, 10);
+    const allowedSections = new Set(['profile', 'medications', 'appointments']);
+    if (!Array.isArray(body.sections) || body.sections.length < 1 || body.sections.length > allowedSections.size
+      || body.sections.some((section) => !allowedSections.has(section))) {
+      throw bad('Select one or more valid report sections.');
+    }
+    const sections = [...new Set(body.sections)];
+    run('DELETE FROM report_shares WHERE user_id = ? AND expires_at <= ?', user.id, now());
+    const summary = healthSummary(user);
+    const report = {
+      user: { name: user.name, ...(sections.includes('profile') ? { email: user.email } : {}) },
+      summary: {
+        periodDays: summary.periodDays,
+        ...(sections.includes('profile') ? { profile: summary.profile } : {}),
+        ...(sections.includes('medications') ? { medications: summary.medications } : {}),
+      },
+      schedules: sections.includes('medications')
+        ? all('SELECT * FROM medication_schedules WHERE user_id = ? ORDER BY created_at DESC LIMIT 50', user.id).map(scheduleOut)
+        : [],
+      appointments: sections.includes('appointments')
+        ? all(`SELECT a.id, a.start_at, a.mode, a.reason, a.status, d.name AS doctor_name
+            FROM appointments a JOIN doctors d ON d.id = a.doctor_id
+            WHERE a.user_id = ? ORDER BY a.start_at DESC LIMIT 50`, user.id)
+          .map((appointment) => ({
+            id: appointment.id, start: appointment.start_at, mode: appointment.mode, reason: appointment.reason,
+            status: appointment.status, doctor: { name: appointment.doctor_name },
+          }))
+        : [],
+      sections,
+      createdAt: now(),
+    };
+    const token = randomToken(32);
+    const expiresAt = new Date(Date.parse(report.createdAt) + 24 * 60 * 60 * 1000).toISOString();
+    const id = uuid();
+    run('INSERT INTO report_shares (id, user_id, token_hash, report_payload, created_at, expires_at) VALUES (?,?,?,?,?,?)',
+      id, user.id, sha256(token), seal(JSON.stringify(report)), report.createdAt, expiresAt);
+    audit(user.id, 'health_report_shared');
+    return { status: 201, body: { shareId: id, token, expiresAt }, headers: { 'Cache-Control': 'no-store' } };
+  }, { auth: 'user' }],
+  ['DELETE', '/api/health/report-shares/:id', ({ user, params }) => {
+    if (user.role !== 'user') throw new HttpError(403, 'Patient accounts only.');
+    const share = get('SELECT id FROM report_shares WHERE id = ? AND user_id = ?', params.id, user.id);
+    if (!share) throw new HttpError(404, 'Report share not found.');
+    run('UPDATE report_shares SET revoked_at = ?, report_payload = ? WHERE id = ? AND user_id = ? AND revoked_at IS NULL',
+      now(), '', params.id, user.id);
+    audit(user.id, 'health_report_share_revoked');
+    return { body: { ok: true } };
+  }, { auth: 'user' }],
+  ['POST', '/api/health/shared-report/access', ({ req, body }) => {
+    rateLimit(`report-share-access:${ip(req)}`, 30);
+    const token = body.token;
+    if (typeof token !== 'string' || !/^[A-Za-z0-9_-]{43}$/.test(token)) throw new HttpError(404, 'Shared report not found.');
+    run('DELETE FROM report_shares WHERE expires_at <= ?', now());
+    const share = get('SELECT report_payload, expires_at, revoked_at FROM report_shares WHERE token_hash = ?', sha256(token));
+    if (!share || share.revoked_at || share.expires_at <= now()) throw new HttpError(404, 'Shared report not found.');
+    const payload = open(share.report_payload);
+    if (payload === null) throw new HttpError(500, 'Shared report could not be opened.');
+    return {
+      body: { report: JSON.parse(payload), expiresAt: share.expires_at },
+      headers: { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' },
+    };
+  }],
   ['DELETE', '/api/appointments/:id', ({ user, params }) => {
     const a = get('SELECT * FROM appointments WHERE id = ? AND user_id = ?', params.id, user.id);
     if (!a) throw new HttpError(404, 'Appointment not found.');

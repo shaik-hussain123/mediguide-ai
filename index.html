@@ -8,7 +8,7 @@
         content="MediGuide AI – India's trusted CDSCO-approved smart medicine assistant powered by Gemini AI." />
     <!-- Content-Security-Policy: scripts only from this origin; Gemini API + CDN fonts/icons allowed -->
     <meta http-equiv="Content-Security-Policy"
-        content="default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org; media-src 'self' blob:; connect-src 'self' https://generativelanguage.googleapis.com; base-uri 'self'; form-action 'none'; object-src 'none';" />
+        content="default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org; media-src 'self' blob:; connect-src 'self' https://generativelanguage.googleapis.com; base-uri 'self'; form-action 'none'; object-src 'none';" />
     <meta name="theme-color" content="#0a6c8f" />
     <link rel="manifest" href="manifest.json" />
     <link rel="icon" href="icons/icon.svg" type="image/svg+xml" />
@@ -20,10 +20,8 @@
         rel="stylesheet" />
 
     <!-- Leaflet for maps -->
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"
-        integrity="sha256-p4NxAoJBhIIN+hmNHrzRCf9tD/miZyoHS5obTRR9BMY=" crossorigin="" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"
-        integrity="sha256-20nQCchB9co0qIjJZRGuk2/Z9VM+kNiyxNV1lvTlZBo=" crossorigin=""></script>
+    <link rel="stylesheet" href="node_modules/leaflet/dist/leaflet.css" />
+    <script src="node_modules/leaflet/dist/leaflet.js"></script>
 
     <!-- App Styles -->
     <link rel="stylesheet" href="css/style.css" />
@@ -538,7 +536,7 @@
                             <input type="search" id="manualLocationQuery" maxlength="120" placeholder="City, area or PIN code" autocomplete="off" />
                             <button type="button" class="btn-secondary" id="manualLocationSearchBtn">Search</button>
                         </div>
-                        <p class="settings-note">Search terms are sent to OpenStreetMap to find places in India.</p>
+                        <p class="settings-note">Location searches go to OpenStreetMap. Nearby searches send your selected location to a public Overpass server; a backup server may be used if the main one is busy.</p>
                         <div id="manualLocationResults" class="manual-location-results" role="listbox" aria-label="Matching locations" aria-live="polite" hidden></div>
                     </div>
 
@@ -640,6 +638,15 @@
                         <label><input type="checkbox" name="reportSection" value="appointments" checked /> <i class="fas fa-calendar-check" aria-hidden="true"></i> Appointments</label>
                     </fieldset>
                     <button class="btn-primary" id="generateHealthReport" type="button"><i class="fas fa-file-download" aria-hidden="true"></i> Prepare PDF report</button>
+                    <div class="report-share">
+                        <p class="settings-note">Create a read-only link for these sections. Anyone with the link can view them for 24 hours; you can revoke it sooner.</p>
+                        <button class="btn-secondary" id="shareHealthReport" type="button" disabled><i class="fas fa-share-alt" aria-hidden="true"></i> Create share link</button>
+                        <div id="healthReportShareResult" class="report-share-result" aria-live="polite" hidden></div>
+                        <section aria-labelledby="healthReportSharesTitle">
+                            <h3 id="healthReportSharesTitle">Your share links</h3>
+                            <div id="healthReportShareList" aria-live="polite">Sign in to manage report links.</div>
+                        </section>
+                    </div>
                 </section>
             </div>
         </section>

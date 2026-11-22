@@ -39,7 +39,9 @@ export function initSettings({ onSaveHistoryOff }) {
 
   $('#voiceModeBtn').addEventListener('click', () => {
     const on = !getPrefs().voiceMode; setPrefs({ voiceMode: on });
-    showToast(on ? 'Voice mode on: answers are read aloud and the mic sends automatically.' : 'Voice mode off.', 'info');
+    showToast(on
+      ? 'Voice mode on: replies will be read aloud. Tap the mic to speak; your question will send automatically. Allow microphone access when asked.'
+      : 'Voice mode off.', 'info');
   });
   $('#elderlyToggle').addEventListener('click', () => setPrefs({ elderly: !getPrefs().elderly }));
   $('#settingsElderlyMode').addEventListener('change', (e) => setPrefs({ elderly: e.target.checked }));

@@ -1,16 +1,11 @@
 /** Personal medication analytics, a non-diagnostic review checklist and printable health report. */
 import { $, $$, escapeHtml as h, showToast } from '../utils/helpers.js';
 import * as backend from '../services/backend.js';
+import { buildReport } from './healthReport.js';
 
 let reportData = null;
 let healthRequest = 0;
-
-const formatDate = (value) => {
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? 'Not set' : date.toLocaleString('en-IN', {
-    timeZone: 'Asia/Kolkata', day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit',
-  });
-};
+let shareListRequest = 0;
 
 function renderAnalytics(summary) {
   const medications = summary.medications;
@@ -45,28 +40,35 @@ function renderChecklist(summary, schedules) {
   $('#healthRiskChecklist').innerHTML = items.map(([icon, text]) => `<li><i class="fas ${icon}" aria-hidden="true"></i><span>${h(text)}</span></li>`).join('');
 }
 
-function buildReport(user, summary, schedules, appointments, sections) {
-  const profile = summary.profile;
-  const content = [];
-  if (sections.includes('profile')) {
-    content.push(`<section><h2><i class="fas fa-user" aria-hidden="true"></i> Health profile</h2>
-      <dl><div><dt>Name</dt><dd>${h(user.name)}</dd></div><div><dt>Email</dt><dd>${h(user.email)}</dd></div>
-      <div><dt>Age</dt><dd>${h(profile.age || 'Not provided')}</dd></div><div><dt>Weight</dt><dd>${h(profile.weight ? `${profile.weight} kg` : 'Not provided')}</dd></div>
-      <div><dt>Conditions</dt><dd>${h(profile.conditions || 'Not provided')}</dd></div><div><dt>Allergies</dt><dd>${h(profile.allergies || 'Not provided')}</dd></div></dl></section>`);
+function selectedReportSections() {
+  return $$('input[name="reportSection"]:checked').map((input) => input.value);
+}
+
+function renderReportShares(shares) {
+  const list = $('#healthReportShareList');
+  if (!shares.length) {
+    list.innerHTML = '<p>No report links to manage.</p>';
+    return;
   }
-  if (sections.includes('medications')) {
-    const list = schedules.length ? `<ul>${schedules.map((schedule) => `<li><strong>${h(schedule.med_name)}</strong> — ${h(schedule.dosage)}; ${h((schedule.times || []).join(', '))}; ${schedule.active ? 'Active' : 'Inactive'}${schedule.notes ? `; Note: ${h(schedule.notes)}` : ''}</li>`).join('')}</ul>` : '<p>No medication schedules recorded.</p>';
-    content.push(`<section><h2><i class="fas fa-pills" aria-hidden="true"></i> Medication schedules and adherence</h2>
-      <p>Recorded doses in the last ${h(summary.periodDays)} days: ${h(summary.medications.trackedDoses)}; taken: ${h(summary.medications.taken)}; skipped: ${h(summary.medications.skipped)}; missed: ${h(summary.medications.missed)}; adherence: ${summary.medications.adherencePercentage == null ? 'No data' : `${h(summary.medications.adherencePercentage)}%`}.</p>${list}</section>`);
+  list.innerHTML = `<ul class="report-share-list">${shares.map((share) => {
+    const active = !share.revoked_at && Date.parse(share.expires_at) > Date.now();
+    return `<li><strong>${active ? 'Active' : 'Revoked'}</strong> — Expires ${h(new Date(share.expires_at).toLocaleString())}
+      ${active ? `<button class="btn-secondary" type="button" data-share-id="${h(share.id)}">Revoke link</button>` : ''}</li>`;
+  }).join('')}</ul>`;
+}
+
+async function loadReportShares(userId) {
+  const requestId = ++shareListRequest;
+  const list = $('#healthReportShareList');
+  list.textContent = 'Loading report links…';
+  try {
+    const data = await backend.api('/api/health/report-shares');
+    if (requestId !== shareListRequest || backend.getUser()?.id !== userId) return;
+    renderReportShares(data.shares || []);
+  } catch (error) {
+    if (requestId !== shareListRequest) return;
+    list.textContent = `Could not load report links. ${error.message}`;
   }
-  if (sections.includes('appointments')) {
-    const list = appointments.length ? `<ul>${appointments.map((appointment) => `<li><strong>${h(appointment.doctor.name)}</strong> — ${h(formatDate(appointment.start))}; ${h(appointment.mode)}; ${h(appointment.status)}${appointment.reason ? `; Reason: ${h(appointment.reason)}` : ''}</li>`).join('')}</ul>` : '<p>No appointments recorded.</p>';
-    content.push(`<section><h2><i class="fas fa-calendar-check" aria-hidden="true"></i> Appointments</h2>${list}</section>`);
-  }
-  return `<header><h1><i class="fas fa-file-medical" aria-hidden="true"></i> MediGuide AI — Medical Report</h1>
-    <p>Prepared for ${h(user.name)} on ${h(formatDate(new Date().toISOString()))}</p>
-    <p class="report-warning">Personal information provided by the account holder. This report is not a diagnosis, prescription, or substitute for professional medical advice.</p></header>
-    ${content.join('')}<footer>Keep this report private. Verify it is up to date before sharing it with a healthcare professional.</footer>`;
 }
 
 async function loadHealth() {
@@ -75,20 +77,28 @@ async function loadHealth() {
   const user = backend.getUser();
   if (!backend.isOnline()) {
     reportData = null;
+    $('#generateHealthReport').disabled = true;
+    $('#shareHealthReport').disabled = true;
     gate.hidden = false; gate.textContent = 'Health analytics and reports require the MediGuide server.';
     $('#healthBody').hidden = true; return;
   }
   if (!user) {
     reportData = null;
+    $('#generateHealthReport').disabled = true;
+    $('#shareHealthReport').disabled = true;
     gate.hidden = false; gate.textContent = 'Log in to view your private health dashboard.';
     $('#healthBody').hidden = true; return;
   }
   if (user.role !== 'user') {
     reportData = null;
+    $('#generateHealthReport').disabled = true;
+    $('#shareHealthReport').disabled = true;
     gate.hidden = false; gate.textContent = 'This private health dashboard is available to patient accounts.';
     $('#healthBody').hidden = true; return;
   }
   reportData = null;
+  $('#generateHealthReport').disabled = true;
+  $('#shareHealthReport').disabled = true;
   gate.hidden = false;
   gate.textContent = 'Loading your private health data…';
   $('#healthBody').hidden = true;
@@ -104,9 +114,11 @@ async function loadHealth() {
     gate.hidden = true;
     $('#healthBody').hidden = false;
     $('#generateHealthReport').disabled = false;
+    $('#shareHealthReport').disabled = false;
     reportData = {
       user, summary: summaryData, schedules: scheduleData.schedules || [], appointments: appointmentData.appointments || [],
     };
+    void loadReportShares(user.id);
   } catch (error) {
     if (requestId !== healthRequest) return;
     reportData = null;
@@ -115,14 +127,68 @@ async function loadHealth() {
     $('#healthGate').hidden = false;
     $('#healthBody').hidden = true;
     $('#generateHealthReport').disabled = true;
+    $('#shareHealthReport').disabled = true;
   }
 }
 
 export function initHealthDashboard() {
   $('#healthRefresh').addEventListener('click', loadHealth);
   $('#healthEditProfile').addEventListener('click', () => $('#profileBtn').click());
+  $('#shareHealthReport').addEventListener('click', async () => {
+    const sections = selectedReportSections();
+    if (!sections.length) return showToast('Select at least one report section.', 'warn');
+    if (!reportData) return showToast('Refresh your dashboard before sharing a report.', 'error');
+    const button = $('#shareHealthReport');
+    button.disabled = true;
+    try {
+      const share = await backend.api('/api/health/report-shares', { method: 'POST', body: { sections } });
+      const link = `${window.location.origin}/shared-report.html#${encodeURIComponent(share.token)}`;
+      const result = $('#healthReportShareResult');
+      result.dataset.shareId = share.shareId;
+      result.innerHTML = `<p>This link lets anyone who has it view the selected report sections until ${h(new Date(share.expiresAt).toLocaleString())}. Revoke it any time.</p>
+        <div class="report-share-link"><label for="healthReportShareLink">Share link</label><input id="healthReportShareLink" type="url" readonly value="${h(link)}" /><button class="btn-secondary" id="copyHealthReportLink" type="button">Copy link</button></div>`;
+      result.hidden = false;
+      await loadReportShares(reportData.user.id);
+    } catch (error) {
+      showToast(`Could not create a share link: ${error.message}`, 'error');
+    } finally {
+      button.disabled = !reportData;
+    }
+  });
+  $('#healthReportShareResult').addEventListener('click', async (event) => {
+    if (event.target.closest('#copyHealthReportLink')) {
+      const input = $('#healthReportShareLink');
+      try {
+        await navigator.clipboard.writeText(input.value);
+        showToast('Share link copied.', 'success');
+      } catch {
+        input.focus();
+        input.select();
+        showToast('Copy is unavailable. Select the link and copy it manually.', 'warn');
+      }
+    }
+  });
+  $('#healthReportShareList').addEventListener('click', async (event) => {
+    const button = event.target.closest('button[data-share-id]');
+    if (!button) return;
+    button.disabled = true;
+    try {
+      await backend.api(`/api/health/report-shares/${encodeURIComponent(button.dataset.shareId)}`, { method: 'DELETE' });
+      const result = $('#healthReportShareResult');
+      if (result.dataset.shareId === button.dataset.shareId) {
+        result.hidden = true;
+        result.innerHTML = '';
+        delete result.dataset.shareId;
+      }
+      if (backend.getUser()?.id) await loadReportShares(backend.getUser().id);
+      showToast('Report link revoked.', 'success');
+    } catch (error) {
+      button.disabled = false;
+      showToast(`Could not revoke the report link: ${error.message}`, 'error');
+    }
+  });
   $('#generateHealthReport').addEventListener('click', () => {
-    const sections = $$('input[name="reportSection"]:checked').map((input) => input.value);
+    const sections = selectedReportSections();
     if (!sections.length) return showToast('Select at least one report section.', 'warn');
     if (!reportData) return showToast('Refresh your dashboard before preparing a report.', 'error');
     const area = $('#reportPrintArea');

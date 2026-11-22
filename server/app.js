@@ -22,13 +22,18 @@ const SECURITY_HEADERS = {
   'X-Frame-Options': 'DENY',
   'Permissions-Policy': 'camera=(), geolocation=(self), microphone=(self)',
   'Cross-Origin-Opener-Policy': 'same-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org; media-src 'self' blob:; connect-src 'self' https://generativelanguage.googleapis.com; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org; media-src 'self' blob:; connect-src 'self' https://generativelanguage.googleapis.com; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'",
   ...(config.production ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {}),
 };
 
 const MIME = { '.html': 'text/html; charset=utf-8', '.js': 'text/javascript; charset=utf-8', '.css': 'text/css; charset=utf-8', '.json': 'application/json; charset=utf-8',
   '.svg': 'image/svg+xml', '.png': 'image/png', '.ico': 'image/x-icon', '.webmanifest': 'application/manifest+json' };
-const PUBLIC = [/^index\.html$/, /^sw\.js$/, /^manifest\.json$/, /^(css|js|icons)\//, /^data\/medicines\.json$/];
+const PUBLIC = [
+  /^index\.html$/, /^shared-report\.html$/, /^sw\.js$/, /^manifest\.json$/,
+  /^(css|js|icons)\//, /^data\/medicines\.json$/,
+  /^node_modules\/leaflet\/dist\/leaflet\.(js|css)$/,
+  /^node_modules\/leaflet\/dist\/images\/(layers(-2x)?|marker-icon(-2x)?|marker-shadow)\.png$/,
+];
 
 function serveStatic(req, res, pathname) {
   let rel = decodeURIComponent(pathname).replace(/^\/+/, '') || 'index.html';
@@ -38,7 +43,10 @@ function serveStatic(req, res, pathname) {
   }
   fs.readFile(file, (err, buf) => {
     if (err) return sendJson(res, 404, { error: 'Not found.' });
-    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', 'Cache-Control': 'no-cache', ...SECURITY_HEADERS });
+    const pageHeaders = rel === 'shared-report.html'
+      ? { 'Cache-Control': 'no-store', 'X-Robots-Tag': 'noindex, nofollow' }
+      : { 'Cache-Control': 'no-cache' };
+    res.writeHead(200, { 'Content-Type': MIME[path.extname(file)] || 'application/octet-stream', ...pageHeaders, ...SECURITY_HEADERS });
     res.end(req.method === 'HEAD' ? undefined : buf);
   });
 }

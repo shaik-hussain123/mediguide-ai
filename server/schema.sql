@@ -30,6 +30,12 @@ CREATE TABLE IF NOT EXISTS reminders (
 CREATE TABLE IF NOT EXISTS audit (
   id INTEGER PRIMARY KEY AUTOINCREMENT, at TEXT NOT NULL, user_id TEXT, event TEXT NOT NULL, detail TEXT NOT NULL DEFAULT ''
 );
+CREATE TABLE IF NOT EXISTS report_shares (
+  id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+  token_hash TEXT NOT NULL UNIQUE, report_payload TEXT NOT NULL,
+  created_at TEXT NOT NULL, expires_at TEXT NOT NULL, revoked_at TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_report_shares_user ON report_shares(user_id);
 
 CREATE TABLE IF NOT EXISTS medication_schedules (
   id TEXT PRIMARY KEY, user_id TEXT NOT NULL REFERENCES users(id) ON DELETE CASCADE,

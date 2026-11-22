@@ -31,8 +31,15 @@ The Gemini API key is required for the AI assistant. Google OAuth credentials ar
 | `/api/schedules/{id}` | DELETE | Delete schedule | Yes |
 | `/api/schedules/{id}/log`| POST | Log dose activity | Yes |
 | `/api/health/summary` | GET | Return the signed-in patient's own profile summary, medication activity, appointment counts, and reminder count | Patient |
+| `/api/health/report-shares` | POST | Create a one-day encrypted snapshot link for selected report sections | Patient |
+| `/api/health/report-shares` | GET | List the patient's active and revoked report links | Patient |
+| `/api/health/report-shares/{id}` | DELETE | Revoke a report link immediately | Patient |
+| `/api/health/shared-report/access` | POST | Read a shared report using its bearer token | No login; token required |
 
 The health summary covers the most recent 30 days of dose logs. An adherence value is `null` when no doses have been logged; it is not a clinical risk score.
+Share links show only the selected sections, expire after 24 hours, and can be revoked by the patient. The token is returned only when the link is created; the database stores its hash and an encrypted report snapshot. Anyone with the link can view it until it expires or is revoked.
+
+Nearby healthcare searches use a public OpenStreetMap Overpass instance, with `overpass.private.coffee` as a failover when the primary is busy. Results are cached for five minutes and requests are limited per client IP. The selected location may be sent to either instance.
 
 ## Appointments and Doctor Accounts
 
@@ -46,7 +53,7 @@ The health summary covers the most recent 30 days of dose logs. An adherence val
 | `/api/doctor/appointments` | GET | List all appointments; visit links and updates are limited to the assigned doctor | Doctor |
 | `/api/doctor/appointments/{id}` | PATCH | Mark an assigned appointment completed or cancel an upcoming one | Assigned Doctor |
 
-Doctors can view all appointments, as configured, but can change status only for appointments assigned to their profile. Passwords are hashed and never returned. Patient analytics and reports are private to the signed-in patient; PDF output is prepared locally through the browser's print dialog.
+Doctors can view all appointments, as configured, but can change status only for appointments assigned to their profile. Passwords are hashed and never returned. Patient analytics and reports are private to the signed-in patient; PDF output is prepared locally through the browser's print dialog. Shared report links are bearer links with a 24-hour expiry and revocation.
 
 ## Adverse Drug Reaction (ADR) Endpoints
 

@@ -75,9 +75,16 @@ const eq = (a, b, msg) => { assert.equal(a, b, msg); passed++; };
 let r = await call('GET', '/api/health'); eq(r.status, 200, 'health'); eq(r.json.ai, false, 'ai not set at start');
 r = await call('GET', '/'); eq(r.status, 200, 'index'); ok(r.text.includes('MediGuide'), 'index body'); ok(r.headers.get('content-security-policy').includes("frame-ancestors 'none'"), 'CSP header'); eq(r.headers.get('x-content-type-options'), 'nosniff', 'nosniff');
 ok(r.headers.get('permissions-policy').includes('geolocation=(self)'), 'geolocation allowed for same-origin UI');
-ok(r.headers.get('content-security-policy').includes('https://unpkg.com'), 'Leaflet CDN allowed by CSP');
+ok(!r.headers.get('content-security-policy').includes('https://unpkg.com'), 'map library does not require the external CDN');
 for (const bad of ['/server/app.js', '/data/.secrets.json', '/package.json', '/tests/run.mjs', '/..%2f..%2fetc/passwd', '/%2e%2e/server/lib/config.js']) { r = await call('GET', bad); ok(r.status === 404, `blocked ${bad} (got ${r.status})`); }
 eq((await call('GET', '/js/app.js')).status, 200, 'js served');
+eq((await call('GET', '/node_modules/leaflet/dist/leaflet.js')).status, 200, 'local Leaflet script served');
+eq((await call('GET', '/node_modules/leaflet/dist/images/marker-icon.png')).status, 200, 'local Leaflet marker icon served');
+eq((await call('GET', '/node_modules/leaflet/package.json')).status, 404, 'unapproved dependency files are not public');
+const sharedPage = await call('GET', '/shared-report.html');
+eq(sharedPage.status, 200, 'shared report page');
+eq(sharedPage.headers.get('cache-control'), 'no-store', 'shared report page is not cached');
+eq(sharedPage.headers.get('x-robots-tag'), 'noindex, nofollow', 'shared report page is not indexed');
 eq((await call('GET', '/api/places/geocode?q=x')).status, 400, 'short place search rejected');
 r = await call('GET', '/api/places/geocode?q=Bengaluru%20Karnataka'); eq(r.status, 200, 'manual location search');
 eq(r.json.results.length, 1, 'invalid geocoder results filtered');
@@ -89,10 +96,14 @@ eq(geocodeCalls.length, 1, 'cached search avoids another geocoder request');
 eq((await call('GET', '/api/places/geocode?q=Chennai')).status, 429, 'geocoder requests rate-limited');
 const originalFetch = globalThis.fetch;
 let overpassAttempts = 0;
+let backupOverpassAttempts = 0;
 globalThis.fetch = async (input, options) => {
   if (String(input) === 'https://overpass-api.de/api/interpreter') {
     overpassAttempts += 1;
-    if (overpassAttempts === 1) return new Response('Overpass request queue is full', { status: 502 });
+    return new Response('Overpass request queue is full', { status: 502 });
+  }
+  if (String(input) === 'https://overpass.private.coffee/api/interpreter') {
+    backupOverpassAttempts += 1;
     return new Response(JSON.stringify({ elements: [{
       type: 'node', lat: 12.9726, lon: 77.5946,
       tags: { name: 'Central Health Clinic', 'addr:city': 'Bengaluru' },
@@ -102,10 +113,18 @@ globalThis.fetch = async (input, options) => {
 };
 try {
   r = await call('GET', '/api/places/nearby?latitude=12.9716&longitude=77.5946&radius=1000&type=clinic');
-  eq(r.status, 200, 'nearby places retries after temporary Overpass saturation');
-  eq(overpassAttempts, 2, 'nearby places retries the transient 502 once');
+  eq(r.status, 200, 'nearby places fail over after primary Overpass saturation');
+  eq(overpassAttempts, 1, 'primary Overpass is attempted once');
+  eq(backupOverpassAttempts, 1, 'backup Overpass serves the failed primary request');
   eq(r.json.total, 1, 'nearby place result count');
   eq(r.json.places[0].name, 'Central Health Clinic', 'nearby place data returned');
+  r = await call('GET', '/api/places/nearby?latitude=12.9716&longitude=77.5946&radius=1000&type=clinic');
+  eq(r.status, 200, 'nearby result is cached');
+  eq(backupOverpassAttempts, 1, 'cached search avoids another Overpass request');
+  r = await call('GET', '/api/places/nearby?latitude=12.9717&longitude=77.5946&radius=1000&type=clinic');
+  eq(r.status, 200, 'nearby search uses backup during primary cooldown');
+  eq(overpassAttempts, 1, 'primary cooldown avoids repeated unavailable requests');
+  eq(backupOverpassAttempts, 2, 'backup serves searches during primary cooldown');
 } finally {
   globalThis.fetch = originalFetch;
 }
@@ -266,6 +285,38 @@ health = await call('GET', '/api/health/summary', { token: T2 });
 eq(health.json.medications.activeSchedules, 1, 'active schedule count');
 eq(health.json.medications.trackedDoses, 1, 'tracked dose count');
 eq(health.json.medications.adherencePercentage, 100, 'adherence based on recorded doses');
+eq((await call('POST', '/api/health/report-shares', { token: T2, body: { sections: [] } })).status, 400, 'report share requires selected sections');
+eq((await call('POST', '/api/health/report-shares', { token: T2, body: { sections: ['profile', 'unknown'] } })).status, 400, 'report share rejects unknown sections');
+r = await call('POST', '/api/health/report-shares', { token: T2, body: { sections: ['profile', 'medications'] } });
+eq(r.status, 201, 'patient creates report share');
+const reportShare = r.json;
+ok(/^[A-Za-z0-9_-]{43}$/.test(reportShare.token), 'share token has sufficient random-token format');
+const storedShare = get('SELECT * FROM report_shares WHERE id = ?', reportShare.shareId);
+ok(storedShare.token_hash !== reportShare.token, 'raw share token is not stored');
+ok(storedShare.report_payload.startsWith('v1.') && !storedShare.report_payload.includes('asha@example.com'), 'report snapshot encrypted at rest');
+eq(Date.parse(reportShare.expiresAt) - Date.parse(storedShare.created_at), 86400000, 'report link expires after 24 hours');
+eq((await call('GET', '/api/health/report-shares')).status, 401, 'report share list requires login');
+const listedShares = await call('GET', '/api/health/report-shares', { token: T2 });
+eq(listedShares.json.shares.length, 1, 'patient can list own report share');
+ok(!JSON.stringify(listedShares.json).includes(reportShare.token), 'share token is not returned when listing');
+eq((await call('GET', '/api/health/report-shares', { token: doctorToken })).status, 403, 'doctor cannot manage patient report shares');
+r = await call('POST', '/api/health/shared-report/access', { body: { token: reportShare.token } });
+eq(r.status, 200, 'bearer token opens shared report without login');
+eq(JSON.stringify(r.json.report.sections), '["profile","medications"]', 'shared report contains selected sections only');
+eq(r.json.report.user.email, 'asha@example.com', 'selected profile is present');
+eq(r.json.report.appointments.length, 0, 'unselected appointments are excluded');
+ok(!JSON.stringify(r.json).includes('room'), 'shared report does not include video-room links');
+eq((await call('POST', '/api/health/shared-report/access', { body: { token: 'invalid' } })).status, 404, 'invalid report token rejected');
+r = await call('POST', '/api/auth/register', { body: { name: 'Other Patient', email: 'other@example.com', password: 'password123' } });
+const otherPatientToken = r.json.accessToken;
+eq((await call('DELETE', `/api/health/report-shares/${reportShare.shareId}`, { token: otherPatientToken })).status, 404, 'patient cannot revoke another patient report share');
+eq((await call('DELETE', `/api/health/report-shares/${reportShare.shareId}`, { token: T2 })).status, 200, 'owner revokes report share');
+eq((await call('POST', '/api/health/shared-report/access', { body: { token: reportShare.token } })).status, 404, 'revoked report link is inaccessible');
+ok(get('SELECT report_payload FROM report_shares WHERE id = ?', reportShare.shareId).report_payload === '', 'revocation erases encrypted report snapshot');
+const expiringShare = await call('POST', '/api/health/report-shares', { token: T2, body: { sections: ['appointments'] } });
+run('UPDATE report_shares SET expires_at = ? WHERE id = ?', new Date(Date.now() - 1000).toISOString(), expiringShare.json.shareId);
+eq((await call('POST', '/api/health/shared-report/access', { body: { token: expiringShare.json.token } })).status, 404, 'expired report link rejected');
+eq(get('SELECT id FROM report_shares WHERE id = ?', expiringShare.json.shareId), null, 'expired share snapshot removed');
 await call('DELETE', `/api/schedules/${schedule.json.schedule._id}`, { token: T2 });
 
 /* ---- reminders ---- */

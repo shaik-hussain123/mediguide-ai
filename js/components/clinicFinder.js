@@ -268,7 +268,16 @@ async function searchNearby() {
     console.error('Places search error:', err);
     showToast(err.message || 'Failed to search nearby places. Please try again.', 'error');
     $('#clinicList').innerHTML = `<div class="clinic-error"><i class="fas fa-triangle-exclamation" aria-hidden="true"></i><p>Failed to load places. ${h(err.message || 'Please try again.')}</p></div>`;
-    $('#clinicMap').innerHTML = '<div class="map-error">Map unavailable</div>';
+    if (createMap(currentLat, currentLon)) {
+      addUserMarker(currentLat, currentLon);
+      const notice = document.createElement('p');
+      notice.className = 'map-status';
+      notice.setAttribute('role', 'status');
+      notice.textContent = 'Nearby places could not be loaded. The map shows your location only.';
+      $('#clinicMap').appendChild(notice);
+    } else {
+      $('#clinicMap').innerHTML = '<div class="map-error">Map unavailable. Use the facility list and directions instead.</div>';
+    }
   } finally {
     isSearching = false;
     if (btn) {

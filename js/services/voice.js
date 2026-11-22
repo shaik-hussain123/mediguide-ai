@@ -110,7 +110,7 @@ export function startDictation({
     const error = e.error;
     let message = 'Could not hear you. Please try again.';
     if (error === 'not-allowed' || error === 'permission-denied') {
-      message = 'Microphone permission denied. Please enable microphone access in browser settings.';
+      message = 'Microphone access is blocked for this site. Allow it in browser site permissions, then try again.';
     } else if (error === 'no-speech') {
       message = 'No speech detected. Please try again.';
     } else if (error === 'network') {

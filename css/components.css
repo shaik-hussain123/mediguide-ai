@@ -294,6 +294,13 @@
 .health-report { margin-top: 16px; }
 .report-options { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
 .report-options label { display: inline-flex; align-items: center; gap: 6px; }
+.report-share { margin-top: 16px; }
+.report-share h3 { margin: 18px 0 8px; }
+.report-share-list { display: grid; gap: 8px; margin: 0; padding: 0; list-style: none; }
+.report-share-list li, .report-share-result { padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
+.report-share-link { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 8px; }
+.report-share-link input { flex: 1 1 280px; min-width: 0; }
+.report-share-list button { margin-left: 8px; }
 #reportPrintArea { display: none; }
 .report-warning { padding: 10px; border: 1px solid #9a5c00; border-radius: 8px; }
 body.printing-report > :not(#reportPrintArea) { display: none !important; }
@@ -454,6 +461,7 @@ html[lang='bn'] body { font-family: 'Noto Sans Bengali', 'Nirmala UI', var(--fon
   padding: 20px;
 }
 .map-placeholder i, .loading-map i { font-size: 3rem; margin-bottom: 12px; }
+.map-status { position: absolute; z-index: 1000; top: 8px; left: 8px; right: 8px; margin: 0; padding: 8px 12px; border: 1px solid var(--border); border-radius: 8px; background: var(--card); color: var(--text); box-shadow: 0 2px 8px var(--shadow); }
 
 .clinic-empty, .clinic-error {
   display: flex;
