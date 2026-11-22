@@ -51,6 +51,10 @@
 .med-desc { margin: 0 0 14px; font-size: 1.02rem; }
 .med-card h4 { display: flex; align-items: center; gap: 8px; font-size: 1.02rem; margin: 0 0 8px; }
 .med-card h4 i { color: var(--primary); }
+.india-regulatory { margin: 0 0 14px; padding: 12px 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--bg); }
+.india-regulatory p { margin: 6px 0; }
+.india-regulatory a { font-weight: 700; }
+.india-regulatory .regulatory-note { color: var(--muted); font-size: .82rem; }
 
 /* FR-10.6 tooltips */
 .term { border-bottom: 2px dotted var(--primary); cursor: help; position: relative; }
@@ -266,6 +270,45 @@
 .doctor-card p { margin: 4px 0 0; color: var(--muted); font-size: .9rem; }
 .doc-spec { color: var(--primary-dark); font-weight: 700; }
 .book-panel { margin-top: 16px; padding: 14px; border: 2px solid var(--primary); border-radius: 12px; }
+.doctor-portal { width: 100%; }
+.doctor-portal .appt-item > div:first-child { display: grid; gap: 5px; }
+.appointment-list-heading { display: flex; flex-wrap: wrap; align-items: center; gap: 10px; margin: 18px 0 10px; }
+.appointment-list-heading h3 { margin: 0 auto 0 0; font-size: 1.05rem; }
+.appointment-list-heading select { min-width: 130px; }
+.doctor-account-box { margin-top: 20px; }
+.doctor-mode-options { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.doctor-mode-options label, .doctor-mode { display: inline-flex; align-items: center; gap: 6px; }
+.doctor-account-list { margin-top: 14px; }
+.doctor-account-list .doctor-card { align-items: flex-start; }
+.health-stat-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(145px, 1fr)); gap: 10px; margin: 12px 0; }
+.health-stat { display: grid; gap: 6px; padding: 14px; border: 1px solid var(--border); border-radius: 12px; background: var(--primary-soft); }
+.health-stat i { color: var(--primary-dark); font-size: 1.15rem; }
+.health-stat strong { font-size: 1.35rem; }
+.health-stat span, .health-adherence p { color: var(--muted); }
+.health-adherence { margin: 14px 0; padding: 12px; border: 1px solid var(--border); border-radius: 12px; }
+.health-adherence progress { display: block; width: 100%; min-height: 16px; margin: 8px 0; accent-color: var(--good); }
+.health-dose-counts { display: flex; flex-wrap: wrap; gap: 10px 16px; font-size: .9rem; }
+.health-checklist { display: grid; gap: 10px; margin: 12px 0; padding: 0; list-style: none; }
+.health-checklist li { display: flex; align-items: flex-start; gap: 9px; padding: 10px; border: 1px solid var(--border); border-radius: 10px; }
+.health-checklist li > i { margin-top: 3px; color: var(--primary-dark); }
+.health-report { margin-top: 16px; }
+.report-options { display: flex; flex-wrap: wrap; gap: 12px; margin: 0 0 14px; padding: 10px 12px; border: 1px solid var(--border); border-radius: 10px; }
+.report-options label { display: inline-flex; align-items: center; gap: 6px; }
+#reportPrintArea { display: none; }
+.report-warning { padding: 10px; border: 1px solid #9a5c00; border-radius: 8px; }
+body.printing-report > :not(#reportPrintArea) { display: none !important; }
+body.printing-report > #reportPrintArea { display: block !important; padding: 24px; color: #111; background: #fff; font: 11pt/1.5 Arial, sans-serif; }
+#reportPrintArea h1 { margin: 0 0 8px; font-size: 20pt; }
+#reportPrintArea h2 { margin: 18px 0 8px; font-size: 14pt; }
+#reportPrintArea section { break-inside: avoid; border-top: 1px solid #aaa; padding-top: 8px; }
+#reportPrintArea dl > div { display: grid; grid-template-columns: 150px 1fr; gap: 12px; margin: 4px 0; }
+#reportPrintArea dt { font-weight: 700; }
+#reportPrintArea dd { margin: 0; overflow-wrap: anywhere; }
+#reportPrintArea footer { margin-top: 24px; border-top: 1px solid #aaa; padding-top: 8px; font-size: 9pt; }
+@media print {
+  body.printing-report > #reportPrintArea { display: block !important; }
+  #reportPrintArea a { color: #111; }
+}
 .slot-list { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
 .slot-btn { min-height: var(--tap); min-width: 76px; padding: 0 12px; border: 2px solid var(--primary); border-radius: 10px; background: var(--card); font-weight: 700; }
 .slot-btn[aria-pressed='true'] { background: var(--primary); color: var(--on-primary); }
@@ -334,6 +377,24 @@ html[lang='bn'] body { font-family: 'Noto Sans Bengali', 'Nirmala UI', var(--fon
   border-color: var(--primary);
 }
 .type-chip:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; }
+
+.manual-location-search { display: flex; gap: 8px; margin-top: 8px; }
+.manual-location-search input { min-width: 0; flex: 1; }
+.manual-location-results { display: grid; gap: 6px; margin-top: 8px; }
+.manual-location-option {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--card);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+}
+.manual-location-option:hover, .manual-location-option:focus-visible {
+  border-color: var(--primary);
+  outline: 2px solid var(--focus);
+}
 
 .clinic-results { padding: 16px; }
 .clinic-list { min-height: 200px; }

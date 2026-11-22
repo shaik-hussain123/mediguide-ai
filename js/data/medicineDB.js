@@ -11,7 +11,7 @@ import { KEYS } from '../config.js';
  *
  * Fields beyond SRS §7.1 (used for FR-3 dosage visualisation):
  *  uses (plain-language reasons it is taken; admin-editable), generic, form, unit, rx, tier ('routine'|'care'|'prescription'), pills, schedule[], meal, prn,
- *  byAge{child,adult,senior}, cautions[], symptoms[].
+ *  byAge{child,adult,senior}, cautions[], symptoms[], indianRegulatory.
  */
 
 const SLOTS = ['morning', 'afternoon', 'evening', 'night'];
@@ -57,7 +57,7 @@ const SEED = [
   },
   {
     id: 2, name: 'Brufen 400', generic: 'Ibuprofen', mg: 400, form: 'Tablet', mfg: 'Abbott India',
-    category: 'NSAID Pain Reliever', rx: false, tier: 'care', img: '💊', ageGroup: '12+ years / Adult',
+    category: 'NSAID Pain Reliever', rx: true, tier: 'prescription', img: '💊', ageGroup: '12+ years / Adult',
     description: 'Relieves pain and swelling from headache, toothache, muscle pain, period pain and joint pain, and lowers fever.',
     symptoms: ['pain', 'headache', 'toothache', 'muscle pain', 'joint pain', 'period pain', 'inflammation', 'fever', 'swelling'],
     dose: '1 tablet up to 3 times a day, always after food. Use for the shortest time possible.',
@@ -114,7 +114,7 @@ const SEED = [
   },
   {
     id: 5, name: 'Okacet 10', generic: 'Cetirizine', mg: 10, form: 'Tablet', mfg: 'Cipla',
-    category: 'Antihistamine (Allergy)', rx: false, tier: 'routine', img: '💊', ageGroup: '6+ years / Adult',
+    category: 'Antihistamine (Allergy)', rx: true, tier: 'prescription', img: '💊', ageGroup: '6+ years / Adult',
     description: 'Relieves sneezing, runny nose, itchy or watery eyes and itchy skin rashes caused by allergies.',
     symptoms: ['allergy', 'sneezing', 'runny nose', 'itching', 'hives', 'rash', 'cold', 'watery eyes', 'hay fever'],
     dose: '1 tablet once a day, preferably at night. It can cause sleepiness.',
@@ -278,7 +278,59 @@ const USES = {
   11: ['Lowering risk of heart attack', 'Lowering risk of stroke', 'Preventing blood clots'],
   12: ['Nausea', 'Vomiting', 'Nausea after surgery or chemotherapy'],
 };
-SEED.forEach((m) => { m.uses = USES[m.id] || []; });
+const INDIA_REGULATORY = {
+  1: {
+    category: 'K',
+    label: 'Schedule K entry — paracetamol tablets',
+    detail: 'The CDSCO 2016 Rules compilation lists paracetamol tablets among household remedies in Schedule K. This entry does not establish that every brand, strength or use is over the counter.',
+  },
+  2: {
+    category: 'H',
+    label: 'Schedule H entry — ibuprofen',
+    detail: 'Ibuprofen is listed in Schedule H. Rule 65(9)(a) requires retail sale of Schedule H drugs on a Registered Medical Practitioner’s prescription.',
+  },
+  3: {
+    category: 'H',
+    label: 'Schedule H entry — antibiotics',
+    detail: 'Antibiotics are listed in Schedule H. Rule 65(9)(a) requires retail sale of Schedule H drugs on a Registered Medical Practitioner’s prescription.',
+  },
+  4: {
+    category: 'H',
+    label: 'Schedule H entry — antibiotics',
+    detail: 'Antibiotics are listed in Schedule H. Rule 65(9)(a) requires retail sale of Schedule H drugs on a Registered Medical Practitioner’s prescription.',
+  },
+  5: {
+    category: 'H',
+    label: 'Schedule H entry — cetirizine',
+    detail: 'Cetirizine hydrochloride is listed in Schedule H. Rule 65(9)(a) requires retail sale of Schedule H drugs on a Registered Medical Practitioner’s prescription.',
+  },
+  6: {
+    category: 'H',
+    label: 'Schedule H entry — pantoprazole',
+    detail: 'Pantoprazole is listed in Schedule H. Rule 65(9)(a) requires retail sale of Schedule H drugs on a Registered Medical Practitioner’s prescription.',
+  },
+  8: {
+    category: 'G',
+    label: 'Schedule G entry — metformin',
+    detail: 'Metformin and its salts are listed in Schedule G. Rule 97 requires a medical-supervision caution on the label; this is distinct from the Schedule H retail-prescription rule.',
+  },
+  9: {
+    category: 'H',
+    label: 'Schedule H entry — amlodipine',
+    detail: 'Amlodipine besylate is listed in Schedule H. Rule 65(9)(a) requires retail sale of Schedule H drugs on a Registered Medical Practitioner’s prescription.',
+  },
+  10: {
+    category: 'H',
+    label: 'Schedule H entry — atorvastatin',
+    detail: 'Atorvastatin is listed in Schedule H. Rule 65(9)(a) requires retail sale of Schedule H drugs on a Registered Medical Practitioner’s prescription.',
+  },
+  11: {
+    category: 'K',
+    label: 'Schedule K entry — aspirin tablets',
+    detail: 'The CDSCO 2016 Rules compilation lists aspirin tablets among household remedies in Schedule K. This entry does not establish that every brand, strength or use is over the counter.',
+  },
+};
+SEED.forEach((m) => { m.uses = USES[m.id] || []; m.indianRegulatory = INDIA_REGULATORY[m.id] || null; });
 
 /* ------------------------------------------------------------------ */
 let source = SEED;

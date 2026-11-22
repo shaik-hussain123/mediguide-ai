@@ -10,6 +10,16 @@
 | `/api/auth/me` | GET | Get current user info | Yes |
 | `/api/auth/refresh` | POST | Refresh access token | Yes |
 
+## Admin Integration Settings
+
+| Endpoint | Method | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `/api/admin/ai` | PUT | Save/remove the Gemini API key and AI model | Admin |
+| `/api/admin/oauth` | GET | Read OAuth credential status and callback URL (never returns secrets) | Admin |
+| `/api/admin/oauth` | PUT | Save/remove Google OAuth client credentials and callback URL | Admin |
+
+The Gemini API key is required for the AI assistant. Google OAuth credentials are optional and enable Google sign-in. Nearby location uses browser geolocation, OpenStreetMap tiles, and Overpass; these do not require API keys.
+
 ## Medication Tracker Endpoints
 
 | Endpoint | Method | Description | Auth Required |
@@ -20,6 +30,23 @@
 | `/api/schedules/{id}` | PUT | Update schedule | Yes |
 | `/api/schedules/{id}` | DELETE | Delete schedule | Yes |
 | `/api/schedules/{id}/log`| POST | Log dose activity | Yes |
+| `/api/health/summary` | GET | Return the signed-in patient's own profile summary, medication activity, appointment counts, and reminder count | Patient |
+
+The health summary covers the most recent 30 days of dose logs. An adherence value is `null` when no doses have been logged; it is not a clinical risk score.
+
+## Appointments and Doctor Accounts
+
+| Endpoint | Method | Description | Auth Required |
+| :--- | :--- | :--- | :--- |
+| `/api/admin/doctors` | POST | Create a doctor profile and login from an admin-provided initial password | Admin |
+| `/api/admin/appointments?view=upcoming|all` | GET | List upcoming or all appointments with patient details | Admin |
+| `/api/admin/appointments` | POST | Book an appointment for a patient | Admin |
+| `/api/admin/appointments/{id}` | PUT | Reschedule an appointment | Admin |
+| `/api/admin/appointments/{id}` | DELETE | Cancel an appointment | Admin |
+| `/api/doctor/appointments` | GET | List all appointments; visit links and updates are limited to the assigned doctor | Doctor |
+| `/api/doctor/appointments/{id}` | PATCH | Mark an assigned appointment completed or cancel an upcoming one | Assigned Doctor |
+
+Doctors can view all appointments, as configured, but can change status only for appointments assigned to their profile. Passwords are hashed and never returned. Patient analytics and reports are private to the signed-in patient; PDF output is prepared locally through the browser's print dialog.
 
 ## Adverse Drug Reaction (ADR) Endpoints
 
@@ -53,8 +80,13 @@
 | Endpoint | Method | Description | Auth Required |
 | :--- | :--- | :--- | :--- |
 | `/api/symptom-check` | POST | Record symptoms | Optional |
+| `/api/places/geocode?q={query}` | GET | Search for a location by area or PIN code (OpenStreetMap Nominatim) | No |
 | `/api/places/nearby` | GET | Find nearby facility | Optional |
 | `/api/prescription/analyze` | POST | Analyze prescription | No |
+
+Manual location search is limited to India and returns up to five matches. Queries are sent to OpenStreetMap Nominatim; repeated searches are briefly cached and requests are rate-limited.
+
+Nearby searches use Overpass API and retry temporary capacity/network failures with exponential backoff (up to two retries).
 
 ## Rate Limiting
 - Auth endpoints: 5 requests/minute

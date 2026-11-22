@@ -33,7 +33,7 @@ let markers = [];
 let userMarker = null;
 let currentLat = null;
 let currentLon = null;
-let watchId = null;
+let manualLocations = [];
 
 function createMap(lat, lon) {
   if (typeof L === 'undefined') {
@@ -171,9 +171,62 @@ function getTypeColor(type) {
 let currentType = 'clinic';
 let currentRadius = 5000;
 let isSearching = false;
+let controlsInitialized = false;
+
+function setLocation(lat, lon, label) {
+  currentLat = lat;
+  currentLon = lon;
+  $('#currentLocation').textContent = label;
+  $('#currentLocation').setAttribute('aria-label', `Selected location: ${label}`);
+  $('#manualLocationResults').hidden = true;
+  createMap(lat, lon);
+  addUserMarker(lat, lon);
+}
+
+async function searchManualLocation() {
+  const input = $('#manualLocationQuery');
+  const button = $('#manualLocationSearchBtn');
+  const resultsBox = $('#manualLocationResults');
+  const searchText = input.value.trim();
+  if (searchText.length < 2) {
+    showToast('Enter at least 2 characters to search for a location.', 'warn');
+    input.focus();
+    return;
+  }
+  if (!backend.isOnline()) {
+    showToast('Manual place search requires the app server. You can still use Find My Location.', 'warn');
+    return;
+  }
+
+  button.disabled = true;
+  resultsBox.hidden = false;
+  resultsBox.textContent = 'Searching locations...';
+  try {
+    const data = await backend.api(`/api/places/geocode?q=${encodeURIComponent(searchText)}`, { auth: false });
+    manualLocations = data.results || [];
+    if (!manualLocations.length) {
+      resultsBox.textContent = 'No matching locations found. Try a nearby city, area or PIN code.';
+      return;
+    }
+    resultsBox.innerHTML = manualLocations.map((location, index) => `
+      <button type="button" class="manual-location-option" role="option" aria-selected="false" data-location-index="${index}">
+        <i class="fas fa-location-dot" aria-hidden="true"></i> ${h(location.name)}
+      </button>
+    `).join('');
+  } catch (error) {
+    resultsBox.textContent = error.message || 'Could not search locations. Please try again.';
+    showToast(error.message || 'Could not search locations. Please try again.', 'error');
+  } finally {
+    button.disabled = false;
+  }
+}
 
 async function searchNearby() {
-  if (isSearching || currentLat === null || currentLon === null) return;
+  if (isSearching) return;
+  if (currentLat === null || currentLon === null) {
+    showToast('Choose a location using Find My Location or Choose Location Manually before searching.', 'warn');
+    return;
+  }
 
   isSearching = true;
   const btn = $('#searchClinicsBtn');
@@ -187,15 +240,24 @@ async function searchNearby() {
   $('#clinicMap').innerHTML = '<div class="loading-map"><i class="fas fa-spinner fa-spin" aria-hidden="true"></i> Loading map...</div>';
 
   try {
-    const data = await backend.api('/api/places/nearby', {
+    const params = new URLSearchParams({
+      latitude: String(currentLat),
+      longitude: String(currentLon),
+      radius: String(currentRadius),
+      type: currentType,
+    });
+    const data = await backend.api(`/api/places/nearby?${params}`, {
       method: 'GET',
       auth: backend.isOnline()  // Only auth if online
-    }, { latitude: currentLat, longitude: currentLon, radius: currentRadius, type: currentType });
+    });
 
     renderPlaceList(data.places || []);
-    createMap(currentLat, currentLon);
-    addUserMarker(currentLat, currentLon);
-    addPlaceMarkers(data.places || []);
+    if (createMap(currentLat, currentLon)) {
+      addUserMarker(currentLat, currentLon);
+      addPlaceMarkers(data.places || []);
+    } else {
+      $('#clinicMap').innerHTML = '<div class="map-error">Interactive map is unavailable. Use the facility list and directions instead.</div>';
+    }
 
     if (data.places?.length) {
       showToast(`Found ${data.places.length} ${TYPE_LABELS[currentType].toLowerCase()}(s) nearby`, 'success');
@@ -232,18 +294,9 @@ function getCurrentLocation() {
 
   navigator.geolocation.getCurrentPosition(
     (position) => {
-      currentLat = position.coords.latitude;
-      currentLon = position.coords.longitude;
-
-      // Update UI
-      $('#currentLocation').textContent = `${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}`;
-      $('#currentLocation').setAttribute('aria-label', `Current location: latitude ${currentLat.toFixed(4)}, longitude ${currentLon.toFixed(4)}`);
-
-      // Create/update map
-      createMap(currentLat, currentLon);
-      addUserMarker(currentLat, currentLon);
-
-      // Auto-search
+      const lat = position.coords.latitude;
+      const lon = position.coords.longitude;
+      setLocation(lat, lon, `${lat.toFixed(4)}, ${lon.toFixed(4)}`);
       searchNearby();
 
       if (btn) {
@@ -313,65 +366,41 @@ function initRadiusSelector() {
   });
 }
 
-function initWatchPosition() {
-  if (!navigator.geolocation) return;
-
-  // Watch for location changes (optional, for real-time updates)
-  watchId = navigator.geolocation.watchPosition(
-    (position) => {
-      const newLat = position.coords.latitude;
-      const newLon = position.coords.longitude;
-
-      // Only update if moved significantly (> 100m)
-      if (currentLat && currentLon) {
-        const R = 6371000;
-        const lat1 = currentLat * Math.PI / 180;
-        const lat2 = newLat * Math.PI / 180;
-        const dLat = (newLat - currentLat) * Math.PI / 180;
-        const dLon = (newLon - currentLon) * Math.PI / 180;
-        const a = Math.sin(dLat/2)**2 + Math.cos(lat1) * Math.cos(lat2) * Math.sin(dLon/2)**2;
-        const distance = R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1-a));
-
-        if (distance > 100) {
-          currentLat = newLat;
-          currentLon = newLon;
-          $('#currentLocation').textContent = `${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}`;
-          if (map) {
-            map.setView([currentLat, currentLon]);
-            addUserMarker(currentLat, currentLon);
-          }
-        }
-      } else {
-        currentLat = newLat;
-        currentLon = newLon;
-        $('#currentLocation').textContent = `${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}`;
-      }
-    },
-    (error) => console.warn('Watch position error:', error),
-    { enableHighAccuracy: true, timeout: 10000, maximumAge: 60000 }
-  );
-}
-
 export function initClinicFinder() {
   // Check if we're on the clinic finder page
   const page = $('#pageClinic');
   if (!page || page.hidden) return;
 
-  // Initialize UI
-  initTypeFilter();
-  initRadiusSelector();
+  if (!controlsInitialized) {
+    initTypeFilter();
+    initRadiusSelector();
+    $('#locateBtn')?.addEventListener('click', getCurrentLocation);
+    $('#searchClinicsBtn')?.addEventListener('click', searchNearby);
 
-  // Event listeners
-  $('#locateBtn')?.addEventListener('click', getCurrentLocation);
-  $('#searchClinicsBtn')?.addEventListener('click', searchNearby);
-
-  // Keyboard support for locate button
-  $('#locateBtn')?.addEventListener('keydown', (e) => {
-    if (e.key === ' ' || e.key === 'Enter') {
-      e.preventDefault();
-      getCurrentLocation();
-    }
-  });
+    $('#locateBtn')?.addEventListener('keydown', (e) => {
+      if (e.key === ' ' || e.key === 'Enter') {
+        e.preventDefault();
+        getCurrentLocation();
+      }
+    });
+    $('#manualLocationSearchBtn')?.addEventListener('click', searchManualLocation);
+    $('#manualLocationQuery')?.addEventListener('keydown', (e) => {
+      if (e.key === 'Enter') {
+        e.preventDefault();
+        searchManualLocation();
+      }
+    });
+    $('#manualLocationResults')?.addEventListener('click', (e) => {
+      const option = e.target.closest('[data-location-index]');
+      if (!option) return;
+      const location = manualLocations[Number(option.dataset.locationIndex)];
+      if (!location) return;
+      setLocation(location.latitude, location.longitude, location.name);
+      showToast('Location selected. Searching nearby...', 'success');
+      searchNearby();
+    });
+    controlsInitialized = true;
+  }
 
   // Initialize map placeholder
   $('#clinicMap').innerHTML = '<div class="map-placeholder"><i class="fas fa-map-marker-alt" aria-hidden="true"></i><p>Click "Find My Location" to start</p></div>';
@@ -383,25 +412,15 @@ export function initClinicFinder() {
       const { lat, lon, timestamp } = JSON.parse(stored);
       // Use if less than 1 hour old
       if (Date.now() - timestamp < 3600000) {
-        currentLat = lat;
-        currentLon = lon;
-        $('#currentLocation').textContent = `${currentLat.toFixed(4)}, ${currentLon.toFixed(4)}`;
-        createMap(currentLat, currentLon);
-        addUserMarker(currentLat, currentLon);
+        setLocation(lat, lon, `${lat.toFixed(4)}, ${lon.toFixed(4)}`);
         searchNearby();
       }
     } catch { /* ignore */ }
   }
 
-  // Start watching position for updates
-  initWatchPosition();
 }
 
 export function destroyClinicFinder() {
-  if (watchId) {
-    navigator.geolocation.clearWatch(watchId);
-    watchId = null;
-  }
   if (map) {
     map.remove();
     map = null;

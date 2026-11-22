@@ -18,7 +18,15 @@ async function load() {
   if (!backend.isOnline()) { gate.hidden = false; gate.textContent = t('needServer'); $('#careBody').hidden = true; return; }
   if (!backend.getUser()) { gate.hidden = false; gate.textContent = t('loginToBook'); $('#careBody').hidden = true; return; }
   gate.hidden = true; $('#careBody').hidden = false;
+  const isDoctor = backend.getUser().role === 'doctor';
+  $('#patientCareBody').hidden = isDoctor;
+  $('#doctorPortal').hidden = !isDoctor;
   try {
+    if (isDoctor) {
+      const { appointments } = await backend.api('/api/doctor/appointments');
+      renderDoctorAppointments(appointments);
+      return;
+    }
     if (!doctors.length) doctors = (await backend.api('/api/doctors', { auth: false })).doctors;
     renderDoctors();
     const { appointments } = await backend.api('/api/appointments');
@@ -43,6 +51,21 @@ function renderAppointments(list) {
         : `<button type="button" class="btn-secondary" disabled>${t('join')} (−15 min)</button>`) : ''}
         ${upcoming ? `<button type="button" class="btn-danger" data-cancel="${h(a.id)}">${t('cancel')}</button>` : ''}</div></li>`;
   }).join('') : '<li class="empty">—</li>';
+}
+
+function renderDoctorAppointments(list) {
+  $('#doctorApptList').innerHTML = list.length ? list.map((a) => {
+    const future = a.status === 'booked' && new Date(a.start) > new Date();
+    const action = a.canUpdate && a.status === 'booked'
+      ? `<button type="button" class="${future ? 'btn-danger' : 'btn-primary'}" data-doctor-status="${future ? 'cancelled' : 'completed'}" data-appointment="${h(a.id)}">
+          <i class="fas ${future ? 'fa-calendar-times' : 'fa-check-circle'}" aria-hidden="true"></i> ${future ? 'Cancel appointment' : 'Mark completed'}</button>`
+      : '';
+    return `<li class="appt-item ${h(a.status)}"><div><strong><i class="fas fa-user" aria-hidden="true"></i> ${h(a.patient.name)}</strong>
+      <small>${h(a.patient.email)}</small><div><i class="fas fa-user-md" aria-hidden="true"></i> ${h(a.doctor.name)} · ${h(fmt(a.start))} IST · ${a.mode === 'video' ? t('videoCall') : t('clinic')}</div>
+      <div><i class="fas fa-info-circle" aria-hidden="true"></i> <em>${h(a.status)}</em>${a.reason ? ` · ${h(a.reason)}` : ''}</div>
+      ${a.room ? `<a class="btn-primary" href="${h(a.room)}" target="_blank" rel="noopener noreferrer"><i class="fas fa-video" aria-hidden="true"></i> Open visit</a>` : ''}</div>
+      ${action ? `<div class="rem-actions">${action}</div>` : ''}</li>`;
+  }).join('') : '<li class="empty"><i class="fas fa-calendar-check" aria-hidden="true"></i> No appointments to show.</li>';
 }
 
 async function loadSlots() {
@@ -83,6 +106,17 @@ export function initAppointments() {
   $('#apptList').addEventListener('click', async (e) => {
     const b = e.target.closest('[data-cancel]'); if (!b || !window.confirm(`${t('cancel')}?`)) return;
     try { await backend.api(`/api/appointments/${b.dataset.cancel}`, { method: 'DELETE' }); await load(); } catch (err) { showToast(err.message, 'error'); }
+  });
+  $('#doctorApptList').addEventListener('click', async (e) => {
+    const button = e.target.closest('[data-doctor-status]');
+    if (!button) return;
+    const status = button.dataset.doctorStatus;
+    if (status === 'cancelled' && !window.confirm('Cancel this appointment?')) return;
+    try {
+      await backend.api(`/api/doctor/appointments/${button.dataset.appointment}`, { method: 'PATCH', body: { status } });
+      showToast(status === 'completed' ? 'Appointment marked completed.' : 'Appointment cancelled.', 'success');
+      await load();
+    } catch (err) { showToast(err.message, 'error'); }
   });
   onLangChange(() => { renderDoctors(); load(); });
   backend.onChange(load);

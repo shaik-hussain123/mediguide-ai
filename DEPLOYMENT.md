@@ -63,6 +63,19 @@ npx serve . -l 5500
 
 ## Production Deployment
 
+### Option 0: GitHub Actions + Render (Node.js application)
+
+The repository's supported full-stack app is the Node server (`npm start`), which serves both the frontend and API. The `render.yaml` blueprint configures it with a persistent disk for its SQLite database and disables Render's automatic deploy so GitHub Actions can run tests before deploying.
+
+1. In Render, create a **Blueprint** from this GitHub repository and select the `mediguide-ai-release` branch. Review the `mediguide-ai` web service and provide values for `JWT_SECRET` and `SERVER_SECRET`. Generate independent random values (at least 32 random bytes each); do not reuse or commit them.
+2. After the service is created, open its **Settings** and create a **Deploy Hook**.
+3. In GitHub, open **Settings → Secrets and variables → Actions** and add repository secret `RENDER_DEPLOY_HOOK_URL` with the deploy-hook URL. Keep the URL private.
+4. Push to `mediguide-ai-release`, or run **Actions → Deploy MediGuide AI to Render → Run workflow**. The workflow runs `npm test` and only then triggers the Render deployment.
+5. After the first deployment, use the Render service Shell to promote a registered account: `npm run make-admin -- you@example.com`. Sign in with that account, then open **My Profile → Open Admin Panel → API Keys & Integrations** to add the Gemini key and, optionally, Google OAuth client credentials. Alternatively, configure `GEMINI_API_KEY` and OAuth variables as Render environment secrets.
+6. Check `https://<your-render-service>.onrender.com/api/health` and the app root URL.
+
+The service uses a persistent disk mounted at `/var/data` for SQLite and secret fallback storage. Keep it as a single instance; do not scale horizontally with SQLite. The starter plan is required for a persistent disk. OAuth login is not configured by this blueprint; configure its OAuth environment variables and provider callback URL separately if needed.
+
 ### Option A: Docker Compose (Recommended for Production)
 
 1. **Prepare Environment**

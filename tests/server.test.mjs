@@ -21,6 +21,18 @@ const gem = http.createServer((req, res) => {
 });
 const gemPort = await listen(gem);
 
+/* ---- fake OpenStreetMap geocoder ---- */
+const geocodeCalls = [];
+const geocoder = http.createServer((req, res) => {
+  geocodeCalls.push(new URL(req.url, 'http://localhost'));
+  res.writeHead(200, { 'Content-Type': 'application/json' });
+  res.end(JSON.stringify([
+    { display_name: 'Bengaluru, Karnataka, India', lat: '12.9716', lon: '77.5946' },
+    { display_name: '', lat: 'not-a-coordinate', lon: '0' },
+  ]));
+});
+const geocoderPort = await listen(geocoder);
+
 /* ---- fake OAuth provider (checks PKCE) ---- */
 let lastChallenge = '';
 const idp = http.createServer((req, res) => {
@@ -39,10 +51,11 @@ const idpPort = await listen(idp);
 
 process.env.DATA_DIR = tmp; process.env.DB_FILE = ':memory:';
 process.env.GEMINI_ENDPOINT = `http://127.0.0.1:${gemPort}/v1beta/models`;
+process.env.NOMINATIM_ENDPOINT = `http://127.0.0.1:${geocoderPort}/search`;
 process.env.OAUTH_CLIENT_ID = 'cid'; process.env.OAUTH_CLIENT_SECRET = 'sec';
 process.env.OAUTH_AUTH_URL = `http://127.0.0.1:${idpPort}/auth`; process.env.OAUTH_TOKEN_URL = `http://127.0.0.1:${idpPort}/token`; process.env.OAUTH_USERINFO_URL = `http://127.0.0.1:${idpPort}/userinfo`;
 
-const { openDb, run, get } = await import('../server/lib/db.js');
+const { openDb, run, get, getSetting } = await import('../server/lib/db.js');
 const { createApp } = await import('../server/app.js');
 const { signJwt, verifyJwt } = await import('../server/lib/security.js');
 const { resetRateLimits } = await import('../server/lib/http.js');
@@ -61,8 +74,41 @@ const eq = (a, b, msg) => { assert.equal(a, b, msg); passed++; };
 /* ---- static + headers ---- */
 let r = await call('GET', '/api/health'); eq(r.status, 200, 'health'); eq(r.json.ai, false, 'ai not set at start');
 r = await call('GET', '/'); eq(r.status, 200, 'index'); ok(r.text.includes('MediGuide'), 'index body'); ok(r.headers.get('content-security-policy').includes("frame-ancestors 'none'"), 'CSP header'); eq(r.headers.get('x-content-type-options'), 'nosniff', 'nosniff');
+ok(r.headers.get('permissions-policy').includes('geolocation=(self)'), 'geolocation allowed for same-origin UI');
+ok(r.headers.get('content-security-policy').includes('https://unpkg.com'), 'Leaflet CDN allowed by CSP');
 for (const bad of ['/server/app.js', '/data/.secrets.json', '/package.json', '/tests/run.mjs', '/..%2f..%2fetc/passwd', '/%2e%2e/server/lib/config.js']) { r = await call('GET', bad); ok(r.status === 404, `blocked ${bad} (got ${r.status})`); }
 eq((await call('GET', '/js/app.js')).status, 200, 'js served');
+eq((await call('GET', '/api/places/geocode?q=x')).status, 400, 'short place search rejected');
+r = await call('GET', '/api/places/geocode?q=Bengaluru%20Karnataka'); eq(r.status, 200, 'manual location search');
+eq(r.json.results.length, 1, 'invalid geocoder results filtered');
+eq(r.json.results[0].name, 'Bengaluru, Karnataka, India', 'place label returned');
+eq(r.json.results[0].latitude, 12.9716, 'latitude parsed');
+eq(geocodeCalls[0].searchParams.get('countrycodes'), 'in', 'geocoder search scoped to India');
+r = await call('GET', '/api/places/geocode?q=Bengaluru%20Karnataka'); eq(r.status, 200, 'place search cached');
+eq(geocodeCalls.length, 1, 'cached search avoids another geocoder request');
+eq((await call('GET', '/api/places/geocode?q=Chennai')).status, 429, 'geocoder requests rate-limited');
+const originalFetch = globalThis.fetch;
+let overpassAttempts = 0;
+globalThis.fetch = async (input, options) => {
+  if (String(input) === 'https://overpass-api.de/api/interpreter') {
+    overpassAttempts += 1;
+    if (overpassAttempts === 1) return new Response('Overpass request queue is full', { status: 502 });
+    return new Response(JSON.stringify({ elements: [{
+      type: 'node', lat: 12.9726, lon: 77.5946,
+      tags: { name: 'Central Health Clinic', 'addr:city': 'Bengaluru' },
+    }] }), { status: 200, headers: { 'Content-Type': 'application/json' } });
+  }
+  return originalFetch(input, options);
+};
+try {
+  r = await call('GET', '/api/places/nearby?latitude=12.9716&longitude=77.5946&radius=1000&type=clinic');
+  eq(r.status, 200, 'nearby places retries after temporary Overpass saturation');
+  eq(overpassAttempts, 2, 'nearby places retries the transient 502 once');
+  eq(r.json.total, 1, 'nearby place result count');
+  eq(r.json.places[0].name, 'Central Health Clinic', 'nearby place data returned');
+} finally {
+  globalThis.fetch = originalFetch;
+}
 
 /* ---- register / login / JWT ---- */
 r = await call('POST', '/api/auth/register', { body: { name: 'Asha K', email: 'asha@example.com', password: 'short' } }); eq(r.status, 400, 'weak password');
@@ -117,6 +163,20 @@ r = await call('POST', '/api/auth/register', { body: { name: 'Admin', email: 'ad
 run("UPDATE users SET role = 'admin' WHERE email = 'admin@example.com'");
 const adminTok2 = (await call('POST', '/api/auth/login', { body: { email: 'admin@example.com', password: 'password123' } })).json.accessToken;
 eq((await call('GET', '/api/admin/stats', { token: adminTok2 })).status, 200, 'admin stats');
+eq((await call('GET', '/api/admin/oauth', { token: T2 })).status, 403, 'OAuth settings admin-only');
+r = await call('GET', '/api/admin/oauth', { token: adminTok2 }); eq(r.status, 200, 'OAuth settings status');
+r = await call('PUT', '/api/admin/oauth', { token: adminTok2, body: { clientId: 'test-client-id', clientSecret: 'test-client-secret-123', redirectUri: 'https://mediguide.example/api/auth/oauth/callback' } });
+eq(r.status, 200, 'OAuth settings saved'); eq(r.json.clientSecretConfigured, true, 'OAuth secret configured');
+ok(!JSON.stringify(r.json).includes('test-client-secret-123'), 'OAuth secret never returned');
+ok(getSetting('oauth_client_secret').startsWith('v1.'), 'OAuth secret encrypted in database');
+eq((await call('GET', '/api/auth/oauth/status')).json.enabled, true, 'saved OAuth settings enable sign-in');
+r = await call('GET', '/api/auth/oauth/start'); eq(r.status, 302, 'saved OAuth config starts sign-in');
+const savedOAuthUrl = new URL(r.headers.get('location'));
+eq(savedOAuthUrl.searchParams.get('client_id'), 'test-client-id', 'saved OAuth client ID used');
+eq(savedOAuthUrl.searchParams.get('redirect_uri'), 'https://mediguide.example/api/auth/oauth/callback', 'saved OAuth callback used');
+eq((await call('PUT', '/api/admin/oauth', { token: adminTok2, body: { redirectUri: 'http://example.com/api/auth/oauth/callback' } })).status, 400, 'insecure external OAuth callback rejected');
+r = await call('PUT', '/api/admin/oauth', { token: adminTok2, body: { clear: true } }); eq(r.status, 200, 'saved OAuth settings removed');
+ok((await call('GET', '/api/auth/oauth/status')).json.enabled, 'environment OAuth settings remain active');
 r = await call('POST', '/api/ai/generate', { body: { parts: [{ text: 'hi' }] } }); eq(r.status, 503, 'AI unavailable without key');
 r = await call('PUT', '/api/admin/ai', { token: adminTok2, body: { apiKey: 'AIzaSyDUMMYKEY_1234567890abcdefghij' } }); eq(r.json.ready, true, 'key saved');
 ok(!get("SELECT value FROM settings WHERE key = 'ai_key'").value.includes('AIzaSy'), 'AI key encrypted in DB');
@@ -161,6 +221,53 @@ eq((await call('DELETE', `/api/appointments/${apptId}`, { token: T2 })).status, 
 eq((await call('GET', '/api/appointments', { token: T2 })).json.appointments[0].room, null, 'room hidden after cancel');
 ok((await call('GET', `/api/doctors/${gp.id}/slots?date=${date}`)).json.slots.includes(slot), 'slot freed after cancel');
 
+/* ---- admin appointment management + doctor portal ---- */
+const patientId = get('SELECT id FROM users WHERE email = ?', 'asha@example.com').id;
+const doctorDetails = {
+  name: 'Dr. Nila Test', email: 'doctor@example.com', password: 'doctorpass123',
+  speciality: 'General Physician', languages: ['English', 'Hindi'], modes: ['video', 'clinic'],
+};
+eq((await call('POST', '/api/admin/doctors', { token: T2, body: doctorDetails })).status, 403, 'only admin can create doctor logins');
+eq((await call('POST', '/api/admin/doctors', { token: adminTok2, body: { ...doctorDetails, password: 'short' } })).status, 400, 'doctor password minimum enforced');
+r = await call('POST', '/api/admin/doctors', { token: adminTok2, body: doctorDetails });
+eq(r.status, 201, 'admin creates doctor login'); const doctorId = r.json.doctor.id;
+eq(JSON.stringify(r.json).includes(doctorDetails.password), false, 'doctor password never returned');
+ok(get('SELECT user_id FROM doctors WHERE id = ?', doctorId).user_id, 'doctor login linked to profile');
+ok(!get('SELECT pw_hash FROM users WHERE email = ?', doctorDetails.email).pw_hash.includes(doctorDetails.password), 'doctor password stored as a hash');
+r = await call('POST', '/api/auth/login', { body: { email: doctorDetails.email, password: doctorDetails.password } });
+eq(r.status, 200, 'doctor can log in'); const doctorToken = r.json.accessToken;
+eq(r.json.user.role, 'doctor', 'doctor role returned at login');
+eq((await call('GET', '/api/admin/stats', { token: doctorToken })).status, 403, 'doctor cannot access admin');
+const adminSlot = (await call('GET', `/api/doctors/${doctorId}/slots?date=${date}`)).json.slots[0];
+r = await call('POST', '/api/admin/appointments', { token: adminTok2, body: { userId: patientId, doctorId, start: adminSlot, mode: 'video', reason: 'Annual check-up' } });
+eq(r.status, 201, 'admin books for patient'); const managedApptId = r.json.appointment.id;
+eq(r.json.appointment.patient.email, 'asha@example.com', 'admin appointment includes patient details');
+const adminUpcoming = (await call('GET', '/api/admin/appointments', { token: adminTok2 })).json.appointments;
+ok(adminUpcoming.some((appointment) => appointment.id === managedApptId), 'admin upcoming appointment list');
+const doctorAppointments = (await call('GET', '/api/doctor/appointments', { token: doctorToken })).json.appointments;
+ok(doctorAppointments.some((appointment) => appointment.id === managedApptId && appointment.canUpdate), 'doctor sees and can update own appointment');
+ok(doctorAppointments.some((appointment) => appointment.id === apptId && !appointment.canUpdate && appointment.room === null), 'doctor sees all appointments without other doctors’ room links');
+eq((await call('PATCH', `/api/doctor/appointments/${apptId}`, { token: doctorToken, body: { status: 'cancelled' } })).status, 404, 'doctor cannot update another doctor’s appointment');
+const nextAdminSlot = (await call('GET', `/api/doctors/${doctorId}/slots?date=${date}`)).json.slots[1];
+r = await call('PUT', `/api/admin/appointments/${managedApptId}`, { token: adminTok2, body: { doctorId, start: nextAdminSlot, mode: 'clinic' } });
+eq(r.status, 200, 'admin reschedules appointment');
+eq((await call('POST', '/api/admin/appointments', { token: adminTok2, body: { userId: patientId, doctorId, start: nextAdminSlot, mode: 'clinic' } })).status, 409, 'admin cannot double-book doctor');
+eq((await call('PATCH', `/api/doctor/appointments/${managedApptId}`, { token: doctorToken, body: { status: 'completed' } })).status, 400, 'doctor cannot complete a future appointment');
+eq((await call('DELETE', `/api/admin/appointments/${managedApptId}`, { token: adminTok2 })).status, 200, 'admin cancels appointment');
+eq((await call('GET', '/api/admin/appointments?view=all', { token: adminTok2 })).json.appointments.find((appointment) => appointment.id === managedApptId).status, 'cancelled', 'all view includes cancelled appointments');
+eq((await call('GET', '/api/health/summary')).status, 401, 'health analytics require login');
+eq((await call('GET', '/api/health/summary', { token: doctorToken })).status, 403, 'health analytics are patient-only');
+let health = await call('GET', '/api/health/summary', { token: T2 });
+eq(health.status, 200, 'patient health summary'); eq(health.json.medications.adherencePercentage, null, 'no dose logs are not reported as zero adherence');
+const schedule = await call('POST', '/api/schedules', { token: T2, body: { med_id: 1, med_name: 'Dolo 650', dosage: '1 tablet', times: ['08:00'], days: [1, 2, 3, 4, 5, 6, 0], start_date: new Date().toISOString().slice(0, 10) } });
+eq(schedule.status, 201, 'medication schedule created for analytics');
+eq((await call('POST', `/api/schedules/${schedule.json.schedule._id}/log`, { token: T2, body: { status: 'taken', scheduled_time: new Date().toISOString() } })).status, 201, 'dose log created for analytics');
+health = await call('GET', '/api/health/summary', { token: T2 });
+eq(health.json.medications.activeSchedules, 1, 'active schedule count');
+eq(health.json.medications.trackedDoses, 1, 'tracked dose count');
+eq(health.json.medications.adherencePercentage, 100, 'adherence based on recorded doses');
+await call('DELETE', `/api/schedules/${schedule.json.schedule._id}`, { token: T2 });
+
 /* ---- reminders ---- */
 eq((await call('POST', '/api/reminders', { token: T2, body: { medicine: 'Dolo 650', times: ['25:00'] } })).status, 400, 'bad time');
 r = await call('POST', '/api/reminders', { token: T2, body: { medicine: 'Pan 40', dose: '1 tablet', times: ['20:00', '08:00', '08:00'], days: 10 } }); eq(r.status, 201, 'reminder'); eq(JSON.stringify(r.json.reminder.times), '["08:00","20:00"]', 'times sorted/deduped');
@@ -168,6 +275,25 @@ const remId = r.json.reminder.id;
 eq((await call('PUT', `/api/reminders/${remId}`, { token: T2, body: { active: false } })).json.reminder.active, false, 'pause');
 eq((await call('GET', '/api/reminders', { token: adminTok2 })).json.reminders.length, 0, 'reminders private');
 await call('DELETE', `/api/reminders/${remId}`, { token: T2 }); eq((await call('GET', '/api/reminders', { token: T2 })).json.reminders.length, 0, 'delete');
+
+/* ---- clinical safety + ADR reporting ---- */
+r = await call('POST', '/api/safety/dosage-check', { token: T2, body: { med_id: 1, dosage: 650, frequency: 'QID', patient: { age: 68, conditions: ['hepatic disease'] } } });
+eq(r.status, 200, 'dosage safety check'); eq(r.json.riskLevel === 'HIGH', true, 'high liver/dose risk'); ok(r.json.findings.some((f) => f.ruleType === 'Hepatic'), 'hepatic finding');
+eq((await call('POST', '/api/safety/dosage-check', { body: { med_id: 999, dosage: 500 } })).status, 404, 'unknown medicine rejected');
+eq((await call('POST', '/api/safety/dosage-check', { body: { med_id: 1, dosage: -1 } })).status, 400, 'bad dosage rejected');
+r = await call('POST', '/api/interactions/check', { body: { medications: ['Paracetamol', 'Warfarin'] } });
+eq(r.status, 200, 'interaction check'); eq(r.json.count, 1, 'interaction found'); eq(r.json.interactions[0].severity, 'MAJOR', 'interaction severity');
+r = await call('POST', '/api/safety/score', { body: { medications: ['Ibuprofen', 'Aspirin', 'Paracetamol'] } });
+eq(r.status, 200, 'safety score'); ok(r.json.score >= 0 && r.json.score <= 100, 'score range');
+eq((await call('POST', '/api/interactions/check', { body: { medications: ['Dolo 650'] } })).status, 400, 'interaction needs two medicines');
+r = await call('POST', '/api/adr', { token: T2, body: { medication: 'Brufen 400', reaction: 'Stomach pain', severity: 'Moderate', start_date: '2026-11-20', outcome: 'Recovered', notes: 'After one dose' } });
+eq(r.status, 201, 'ADR created'); const adrId = r.json.report.id;
+eq((await call('GET', '/api/adr', { token: T2 })).json.total, 1, 'ADR list');
+eq((await call('GET', '/api/adr/stats', { token: T2 })).json.total, 1, 'ADR stats');
+r = await call('PUT', `/api/adr/${adrId}`, { token: T2, body: { status: 'resolved', severity: 'Severe' } });
+eq(r.status, 200, 'ADR updated'); eq(r.json.report.status, 'resolved', 'ADR resolved');
+eq((await call('DELETE', `/api/adr/${adrId}`, { token: T2 })).status, 200, 'ADR deleted');
+eq((await call('DELETE', `/api/adr/${adrId}`, { token: T2 })).status, 404, 'deleted ADR missing');
 
 /* ---- OAuth2 + PKCE ---- */
 eq((await call('GET', '/api/auth/oauth/status')).json.enabled, true, 'oauth enabled');
@@ -185,4 +311,4 @@ r = await call('POST', '/api/auth/refresh', { cookie: oauthCookie }); eq(r.json.
 eq((await call('DELETE', '/api/auth/me')).status, 405, '405 for wrong method'); eq((await call('GET', '/api/nope')).status, 404, '404 unknown api');
 eq((await call('POST', '/api/auth/login', { body: undefined })).status === 401 || true, true, 'empty body handled');
 console.log(`OK: ${passed} server assertions passed`);
-app.close(); gem.close(); idp.close(); process.exit(0);
+app.close(); gem.close(); geocoder.close(); idp.close(); process.exit(0);

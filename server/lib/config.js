@@ -31,6 +31,7 @@ export const config = {
   refreshTtl: 14 * 24 * 3600,
   geminiEndpoint: process.env.GEMINI_ENDPOINT || 'https://generativelanguage.googleapis.com/v1beta/models',
   geminiEnvKey: process.env.GEMINI_API_KEY || '',
+  nominatimEndpoint: process.env.NOMINATIM_ENDPOINT || 'https://nominatim.openstreetmap.org/search',
   oauth: {
     authUrl: process.env.OAUTH_AUTH_URL || 'https://accounts.google.com/o/oauth2/v2/auth',
     tokenUrl: process.env.OAUTH_TOKEN_URL || 'https://oauth2.googleapis.com/token',

@@ -9,7 +9,7 @@ import * as gemini from '../services/gemini.js';
 import { askConsent, sharesProfile } from './consent.js';
 import { currentUser } from './auth.js';
 import { getPrefs } from './settings.js';
-import { speak, stopSpeaking, listen, sttSupported, isVoiceMode } from '../services/voice.js';
+import { speak, stopSpeaking, listen, sttSupported, isVoiceMode, getVoiceSupport } from '../services/voice.js';
 import { t, currentLang, onLangChange, LANGS } from '../i18n.js';
 import { KEYS, LIMITS, GEMINI, SYSTEM_PROMPT } from '../config.js';
 

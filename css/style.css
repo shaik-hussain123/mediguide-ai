@@ -46,19 +46,26 @@ a { color: var(--primary-dark); }
 
 /* navbar */
 .navbar { display: flex; align-items: center; justify-content: space-between; flex-wrap: wrap; gap: 10px 16px; padding: 12px 0; }
-.logo { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; font-weight: 800; color: var(--primary-dark); }
+.logo { display: flex; align-items: center; gap: 10px; font-size: 1.5rem; font-weight: 800; color: var(--primary-dark); text-decoration: none; cursor: pointer; }
+.logo:hover { color: var(--primary); }
+.logo:focus-visible { outline: 3px solid var(--focus); outline-offset: 2px; border-radius: 6px; }
 .logo i { color: var(--bad); }
 .ai-text { color: var(--primary); background: var(--primary-soft); padding: 0 8px; border-radius: 8px; }
+
+/* page header with h1 */
+.page-header { margin: 16px 0 8px; }
+.page-header h1 { font-size: 1.75rem; font-weight: 800; color: var(--primary-dark); margin: 0; padding: 0; }
 .nav-center-badges { display: flex; flex-wrap: wrap; gap: 6px; }
 .nav-buttons { display: flex; flex-wrap: wrap; gap: 8px; }
 .nav-btn { display: inline-flex; align-items: center; justify-content: center; gap: 8px; min-height: var(--tap); min-width: var(--tap); padding: 0 14px; background: var(--card); border: 1.5px solid var(--border); border-radius: 12px; font-weight: 600; }
+.nav-icon { display: block; flex: none; width: 22px; height: 22px; fill: none; stroke: currentColor; stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round; }
 .nav-btn:hover { border-color: var(--primary); background: var(--primary-soft); }
 .nav-btn.primary, .nav-btn.active, .nav-btn[aria-pressed='true'] { background: var(--primary); color: var(--on-primary); border-color: var(--primary); }
 .nav-btn[hidden] { display: none; }
 
 .badge { display: inline-flex; align-items: center; gap: 6px; padding: 3px 10px; border-radius: 999px; font-size: .78rem; font-weight: 700; border: 1px solid currentColor; background: var(--card); }
 .badge-india { color: #8a4b00; } .badge-ai { color: var(--primary-dark); } .badge-secure { color: var(--good); } .badge-cdsco { color: var(--good); }
-.badge-rx { color: var(--bad); } .badge-otc { color: var(--good); }
+.badge-rx { color: var(--bad); } .badge-otc { color: var(--good); } .badge-review { color: var(--warn); }
 
 /* page tabs */
 .page-tabs { display: flex; gap: 6px; border-bottom: 2px solid var(--border); margin-bottom: 16px; overflow-x: auto; }

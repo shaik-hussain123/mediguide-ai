@@ -49,15 +49,38 @@ const SLOT_META = {
   night: { icon: 'fa-moon', label: 'Night' },
 };
 const TIER = {
-  routine: { label: 'Everyday medicine', icon: 'fa-circle-check', hint: 'Usually available without a prescription' },
+  routine: { label: 'Everyday medicine', icon: 'fa-circle-check', hint: 'Check the exact pack label; this catalogue does not establish OTC status' },
   care: { label: 'Use with care', icon: 'fa-triangle-exclamation', hint: 'Follow the label closely and ask a doctor if unsure' },
-  prescription: { label: 'Prescription only', icon: 'fa-file-prescription', hint: 'Use only as your doctor prescribed' },
+  prescription: { label: 'Use only as prescribed', icon: 'fa-file-prescription', hint: 'Use only as your doctor prescribed' },
 };
+const CDSCO_RULES_URL = 'https://cdsco.gov.in/opencms/export/sites/CDSCO_WEB/Pdf-documents/acts_rules/2016DrugsandCosmeticsAct1940Rules1945.pdf';
 const MEAL = { before: ['fa-utensils', 'Before food'], after: ['fa-utensils', 'After food'], any: ['fa-utensils', 'With or without food'] };
 const AGE = { child: ['fa-child', 'Child'], adult: ['fa-user', 'Adult'], senior: ['fa-person-cane', 'Senior 60+'] };
 
 export const ageGroupFor = (age) => (age && age < 13 ? 'child' : age >= 60 ? 'senior' : 'adult');
 export const strengthText = (m) => `${Number(m.mg).toLocaleString('en-IN')} ${m.unit || 'mg'}`;
+
+function renderIndianRegulatory(m) {
+  const status = m.indianRegulatory || {
+    label: 'Schedule status not verified',
+    detail: 'This catalogue has not verified the exact product’s Schedule H, H1 or X status. Check the current pack and ask a registered pharmacist; missing data does not mean a medicine is over the counter.',
+  };
+  return `<section class="india-regulatory" aria-label="Indian regulatory information">
+    <h4><i class="fas fa-scale-balanced" aria-hidden="true"></i> Indian label and schedule</h4>
+    <strong>${h(status.label)}</strong>
+    <p>${h(status.detail)}</p>
+    <a href="${CDSCO_RULES_URL}" target="_blank" rel="noopener noreferrer">Official CDSCO Drugs and Cosmetics Rules (2016 compilation)</a>
+    <p class="regulatory-note">The linked compilation is amended through 31 December 2016. Rules may have changed; check the current product packaging. This is general information, not product approval or a substitute for medical advice.</p>
+  </section>`;
+}
+
+function renderRegulatoryBadge(m) {
+  const category = m.indianRegulatory?.category;
+  if (category === 'H') return '<span class="badge badge-rx"><i class="fas fa-file-prescription" aria-hidden="true"></i> Schedule H · Rx</span>';
+  if (category === 'G') return '<span class="badge badge-review"><i class="fas fa-user-doctor" aria-hidden="true"></i> Schedule G · medical supervision</span>';
+  if (m.rx) return '<span class="badge badge-rx"><i class="fas fa-user-doctor" aria-hidden="true"></i> Use only on doctor’s advice</span>';
+  return '<span class="badge badge-review"><i class="fas fa-box" aria-hidden="true"></i> Check pack label</span>';
+}
 
 /** FR-1.5: results list or the "No results" message. */
 export function renderResults(list, selectedId, query = '') {
@@ -72,7 +95,7 @@ export function renderResults(list, selectedId, query = '') {
       <span class="result-emoji" aria-hidden="true">${h(m.img || '💊')}</span>
       <span class="result-main"><strong>${h(m.name)}</strong><small>${h(m.generic || '')} · ${h(strengthText(m))}</small></span>
       <span class="result-mfg">${h(m.mfg)}</span>
-      ${m.rx ? '<span class="rx-chip" title="Prescription only">Rx</span>' : ''}
+      ${m.indianRegulatory?.category === 'H' ? '<span class="rx-chip" title="Schedule H prescription medicine">Rx</span>' : ''}
     </button></li>`).join('');
   return `<div class="result-head" aria-live="polite">${h(t('foundN', { n: list.length }))}</div>
     <ul class="result-list" aria-label="Search results">${items}</ul>`;
@@ -141,8 +164,7 @@ export function renderMedicine(m, age = 'adult', assessment = null) {
       <div class="med-title"><h3 id="medTitle">${h(m.name)}</h3>
         <div class="med-sub">${termify(m.generic || '')} · ${h(m.form || '')}</div></div>
       <div class="med-badges">
-        <span class="badge badge-cdsco"><i class="fas fa-check-circle" aria-hidden="true"></i> ${h(t('cdsco'))}</span>
-        <span class="badge ${m.rx ? 'badge-rx' : 'badge-otc'}">${m.rx ? `<i class="fas fa-file-prescription" aria-hidden="true"></i> ${h(t('rxBadge'))}` : `<i class="fas fa-store" aria-hidden="true"></i> ${h(t('otc'))}`}</span>
+        ${renderRegulatoryBadge(m)}
       </div>
     </header>
     <dl class="med-meta">
@@ -152,10 +174,12 @@ export function renderMedicine(m, age = 'adult', assessment = null) {
       <div><dt><i class="fas fa-tag" aria-hidden="true"></i> ${h(t('category'))}</dt><dd>${termify(m.category)}</dd></div>
       <div><dt><i class="fas fa-users" aria-hidden="true"></i> ${h(t('ageGroup'))}</dt><dd>${h(m.ageGroup || '—')}</dd></div>
     </dl>
+    ${renderIndianRegulatory(m)}
     <p class="med-desc">${termify(m.description)}</p>
     ${m.uses?.length ? `<section class="uses" aria-label="${h(t('commonlyUsed'))}"><h4><i class="fas fa-notes-medical" aria-hidden="true"></i> ${h(t('commonlyUsed'))}</h4>
       <ul class="use-chips">${m.uses.map((u) => `<li>${termify(u)}</li>`).join('')}</ul></section>` : ''}
     ${dosageVisual(m, age)}
+    ${assessment ? '<div id="clinicalFindings" class="clinical-findings"></div>' : ''}
     ${m.cautions?.length ? `<section class="cautions" aria-label="Precautions"><h4><i class="fas fa-triangle-exclamation" aria-hidden="true"></i> ${h(t('important'))}</h4>
       <ul>${m.cautions.map((c) => `<li>${termify(c)}</li>`).join('')}</ul></section>` : ''}
     ${alternativesTable(m)}
@@ -180,18 +204,29 @@ export function renderStoreLinks(med, fallbackQuery = '') {
 export function renderDosageCharts(m, assessment = null) {
   if (!m) return '';
 
-  const safeMin = m.safe_min ?? 0;
-  const safeMax = m.safe_max ?? 0;
-  const pediatricMax = m.pediatric_max ?? 0;
-  const mgPerKgMax = m.mg_per_kg_max ?? 0;
+  const safeMin = Number(m.safe_min);
+  const safeMax = Number(m.safe_max);
+  const pediatricMax = Number(m.pediatric_max);
+  const mgPerKgMax = Number(m.mg_per_kg_max);
+  const sourceName = typeof m.sourceName === 'string' ? m.sourceName.trim() : '';
+  const sourceUrl = typeof m.sourceUrl === 'string' && /^https:\/\//i.test(m.sourceUrl) ? m.sourceUrl : '';
+  const hasDosageEvidence = Boolean(sourceName && sourceUrl);
+  const hasAdultRange = hasDosageEvidence
+    && Number.isFinite(safeMin) && safeMin > 0
+    && Number.isFinite(safeMax) && safeMax >= safeMin;
+  const hasPediatricRange = hasDosageEvidence
+    && Number.isFinite(pediatricMax) && pediatricMax > 0;
+  const confidenceScore = Number(m.confidenceScore);
+  const evidenceTier = Number(m.evidenceTier);
+  const hasConfidence = hasDosageEvidence && m.confidenceScore != null
+    && Number.isFinite(confidenceScore) && confidenceScore >= 0 && confidenceScore <= 100;
+  const hasEvidenceTier = hasDosageEvidence && m.evidenceTier != null
+    && Number.isInteger(evidenceTier) && evidenceTier >= 1 && evidenceTier <= 4;
+  const unit = m.unit || 'mg';
+  const strength = Number(m.mg);
 
-  const evidenceSource = m.sourceName || 'Unknown';
-  const confidenceScore = m.confidenceScore ?? 0;
-  const evidenceTier = m.evidenceTier ?? 0;
-
-  // Adult Dosage Chart
-  const adultChart = `
-    <div class="dosage-chart adult-chart" aria-label="Adult dosage chart">
+  const adultChart = hasAdultRange ? `
+    <div class="dosage-chart adult-chart" aria-label="Adult dosage reference range">
       <h5><i class="fas fa-user" aria-hidden="true"></i> Adult Dosage Range</h5>
       <div class="chart-bar-wrapper">
         <div class="chart-bar adult-bar" role="img" aria-label="Adult dosage range from ${safeMin} to ${safeMax} mg">
@@ -205,72 +240,44 @@ export function renderDosageCharts(m, assessment = null) {
         </div>
       </div>
     </div>
+  ` : `
+    <div class="dosage-chart adult-chart" aria-label="Adult dosage range unavailable">
+      <h5><i class="fas fa-user" aria-hidden="true"></i> Adult Dosage Range</h5>
+      ${Number.isFinite(strength) && strength > 0 ? `<p><strong>Product strength:</strong> ${strength} ${h(unit)} per ${h((m.form || 'unit').toLowerCase())}.</p>` : ''}
+      <p role="status">No verified adult dosage range is available for this entry. Product strength is not a recommended dose. Follow the current package label and confirm the dose with a doctor or pharmacist.</p>
+    </div>
   `;
 
   // Pediatric Dosage Chart
-  const pediatricChart = pediatricMax > 0 || mgPerKgMax > 0 ? `
+  const pediatricChart = hasPediatricRange ? `
     <div class="dosage-chart pediatric-chart" aria-label="Pediatric dosage chart">
       <h5><i class="fas fa-child" aria-hidden="true"></i> Pediatric Dosage Guidance</h5>
       <div class="chart-bar-wrapper">
         <div class="chart-bar pediatric-bar" role="img" aria-label="Pediatric dosage range up to ${pediatricMax} mg">
           <div class="chart-marker min-marker" style="left: 0%"></div>
-          <div class="chart-range" style="left: 0%; width: ${pediatricMax > 0 ? Math.min(100, (pediatricMax / (safeMax || 1)) * 100) : 0}%"></div>
+          <div class="chart-range" style="left: 0%; width: ${hasAdultRange ? Math.min(100, (pediatricMax / safeMax) * 100) : 100}%"></div>
           <div class="chart-marker max-marker" style="right: 0%"></div>
         </div>
         <div class="chart-labels">
-          <span class="label-min">Min: 0 mg</span>
           <span class="label-max">Max: ${pediatricMax} mg</span>
         </div>
       </div>
-      ${mgPerKgMax > 0 ? `<p class="mg-kg-guidance"><i class="fas fa-weight-scale" aria-hidden="true"></i> Weight-based: up to ${mgPerKgMax} mg/kg</p>` : ''}
+      ${Number.isFinite(mgPerKgMax) && mgPerKgMax > 0 ? `<p class="mg-kg-guidance"><i class="fas fa-weight-scale" aria-hidden="true"></i> Weight-based: up to ${mgPerKgMax} mg/kg</p>` : ''}
     </div>
   ` : '';
 
-  // Daily Exposure Chart (if assessment provided)
+  // Show an exposure estimate only when the assessment belongs to this exact medicine.
   let exposureChart = '';
-  if (assessment) {
-    const riskLevel = assessment.risk_level || 'INFORMATIONAL';
-    const dailyExposure = assessment.daily_exposure || 0;
-    const referenceMax = assessment.reference_max || safeMax;
-    const percentOfMax = referenceMax > 0 ? Math.min(100, (dailyExposure / referenceMax) * 100) : 0;
-
-    const riskColors = {
-      'INFORMATIONAL': 'var(--good)',
-      'CAUTION': 'var(--warn)',
-      'ELEVATED_RISK': 'var(--warn)',
-      'CRITICAL_REVIEW_REQUIRED': 'var(--bad)'
-    };
-    const riskColor = riskColors[riskLevel] || 'var(--good)';
-    const riskLabels = {
-      'INFORMATIONAL': 'Safe',
-      'CAUTION': 'Caution',
-      'ELEVATED_RISK': 'Elevated Risk',
-      'CRITICAL_REVIEW_REQUIRED': 'Critical Review Required'
-    };
-    const riskLabel = riskLabels[riskLevel] || 'Unknown';
-
+  const dailyExposure = Number(assessment?.dailyExposure ?? assessment?.daily_exposure);
+  if (assessment?.medication === m.name && Number.isFinite(dailyExposure) && dailyExposure > 0) {
+    const level = String(assessment.overallClinicalSeverity || assessment.riskLevel || assessment.risk_level || '').toUpperCase();
+    const ruleResult = { LOW: 'No rule triggered', MODERATE: 'Review recommended', HIGH: 'Clinician review recommended' }[level] || 'Not available';
     exposureChart = `
       <div class="dosage-chart exposure-chart" aria-label="Daily exposure chart">
-        <h5><i class="fas fa-chart-line" aria-hidden="true"></i> Daily Exposure Assessment</h5>
-        <div class="exposure-summary">
-          <div class="exposure-value" style="color: ${riskColor}">${dailyExposure.toFixed(1)} mg/day</div>
-          <div class="exposure-risk" style="background: ${riskColor}">${riskLabel}</div>
-        </div>
-        <div class="chart-bar-wrapper">
-          <div class="chart-bar exposure-bar" role="img" aria-label="Daily exposure ${dailyExposure.toFixed(1)} mg of ${referenceMax} mg maximum">
-            <div class="chart-range exposure-fill" style="width: ${percentOfMax}%; background: ${riskColor}"></div>
-            <div class="chart-marker threshold-marker" style="left: ${Math.min(100, (referenceMax / (safeMax || 1)) * 100)}%" aria-label="Maximum safe: ${referenceMax} mg"></div>
-          </div>
-          <div class="chart-labels">
-            <span class="label-min">0 mg</span>
-            <span class="label-max">${referenceMax} mg</span>
-          </div>
-        </div>
-        <p class="exposure-details">
-          <span>Dose: ${assessment.dosage || 0} mg</span>
-          <span>Frequency: ${assessment.frequency || 'OD'}</span>
-          <span>Daily multiplier: ${assessment.daily_multiplier || 1}x</span>
-        </p>
+        <h5><i class="fas fa-chart-line" aria-hidden="true"></i> Estimated Daily Exposure</h5>
+        <p><strong>${dailyExposure.toLocaleString('en-IN')} mg/day</strong></p>
+        <p>Rule check: ${h(ruleResult)}</p>
+        <p>This estimate uses the submitted dose and frequency; it does not establish a safe dose or replace the current package label.</p>
       </div>
     `;
   }
@@ -281,16 +288,17 @@ export function renderDosageCharts(m, assessment = null) {
       <h5><i class="fas fa-book-medical" aria-hidden="true"></i> Evidence Source</h5>
       <div class="evidence-row">
         <span class="evidence-label">Source:</span>
-        <span class="evidence-value">${h(evidenceSource)}</span>
+        <span class="evidence-value">${hasDosageEvidence ? `<a href="${h(sourceUrl)}" target="_blank" rel="noopener noreferrer">${h(sourceName)}</a>` : 'Not provided'}</span>
       </div>
       <div class="evidence-row">
         <span class="evidence-label">Confidence:</span>
-        <span class="evidence-value">${confidenceScore}%</span>
+        <span class="evidence-value">${hasConfidence ? `${confidenceScore}%` : 'Not assessed'}</span>
       </div>
       <div class="evidence-row">
         <span class="evidence-label">Evidence Tier:</span>
-        <span class="evidence-value">Tier ${evidenceTier}</span>
+        <span class="evidence-value">${hasEvidenceTier ? `Tier ${evidenceTier}` : 'Not assigned'}</span>
       </div>
+      ${hasDosageEvidence ? '' : '<p>No linked dosage source is available for this entry, so confidence and evidence tier are not assessed.</p>'}
     </div>
   `;
 

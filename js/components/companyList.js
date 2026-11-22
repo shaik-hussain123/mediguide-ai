@@ -23,6 +23,11 @@ export function initCompanies({ onFilter, onPick }) {
 export function renderCompanies(active = '') {
   const grid = $('#companyGrid');
   const list = companies();
+  // Announce dynamic updates only when useful (not during initial load)
+  const statusEl = $('#companyGridStatus');
+  if (statusEl && document.readyState !== 'loading') {
+    statusEl.textContent = list.length ? `${list.length} manufacturer(s) loaded` : 'No manufacturers found';
+  }
   if (!list.length) { grid.innerHTML = '<span class="company-empty"><i class="fas fa-circle-info" aria-hidden="true"></i> No manufacturers found.</span>'; return; }
   grid.innerHTML = list.map((c) => `<span class="company-chip-wrap">
     <button type="button" class="company-chip${c.name === active ? ' active' : ''}" data-company-chip="${h(c.name)}" aria-pressed="${c.name === active}">
@@ -41,7 +46,7 @@ export function openCompany(name) {
     <dl class="company-facts">
       <div><dt>Headquarters</dt><dd>${h(c.hq || '—')}, ${h(c.country)}</dd></div>
       <div><dt>Founded</dt><dd>${c.founded ? h(c.founded) : '—'}</dd></div>
-      <div><dt>CDSCO status</dt><dd>${c.cdscoApproved ? '<span class="badge badge-cdsco"><i class="fas fa-check-circle" aria-hidden="true"></i> Approved</span>' : 'Not approved'}</dd></div>
+      <div><dt>Regulatory status</dt><dd>Not independently verified in this catalogue; check the manufacturer’s current licence and product label.</dd></div>
     </dl>
     <h4 class="company-meds-title">Medicines listed (${meds.length})</h4>
     <ul class="company-meds">${meds.map((m) => `<li><button type="button" class="result-item" data-pick="${m.id}">

@@ -166,7 +166,7 @@ export async function initAuth() {
     const btn = e.currentTarget; setBusy(btn, true);
     try {
       const u = await login({ email: $('#loginEmail').value, password: $('#loginPassword').value, totp: $('#loginTOTP').value });
-      $('#loginPassword').value = ''; $('#loginTOTP').value = ''; closeModal('loginModal'); showToast(`Welcome back, ${u.name.split(' ')[0]}.`, 'success');
+      $('#loginPassword').value = ''; $('#loginTOTP').value = ''; closeModal('loginModal'); showToast(`Welcome back, ${u.role === 'doctor' ? u.name : u.name.split(' ')[0]}.`, 'success');
     } catch (err) { showToast(err.message, 'error'); if (/6-digit/.test(err.message)) $('#loginTOTP').focus(); } finally { setBusy(btn, false); }
   });
   $('#doRegisterBtn').addEventListener('click', async (e) => {

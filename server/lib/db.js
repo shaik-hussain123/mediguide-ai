@@ -10,12 +10,28 @@ export function openDb(file = config.dbFile) {
   db = new DatabaseSync(file);
   db.exec('PRAGMA journal_mode = WAL; PRAGMA foreign_keys = ON;');
   db.exec(fs.readFileSync(path.join(ROOT, 'server', 'schema.sql'), 'utf8'));
+  const doctorColumns = db.prepare('PRAGMA table_info(doctors)').all();
+  if (!doctorColumns.some((column) => column.name === 'user_id')) {
+    db.exec('ALTER TABLE doctors ADD COLUMN user_id TEXT REFERENCES users(id)');
+  }
+  db.exec('CREATE UNIQUE INDEX IF NOT EXISTS ux_doctor_user ON doctors(user_id) WHERE user_id IS NOT NULL');
   seedDoctors();
   return db;
 }
 export const get = (sql, ...p) => db.prepare(sql).get(...p) ?? null;
 export const all = (sql, ...p) => db.prepare(sql).all(...p);
 export const run = (sql, ...p) => db.prepare(sql).run(...p);
+export function transaction(fn) {
+  db.exec('BEGIN IMMEDIATE');
+  try {
+    const result = fn();
+    db.exec('COMMIT');
+    return result;
+  } catch (error) {
+    db.exec('ROLLBACK');
+    throw error;
+  }
+}
 export const now = () => new Date().toISOString();
 
 export function audit(userId, event, detail = '') {

@@ -1,0 +1,25 @@
+services:
+  - type: web
+    name: mediguide-ai
+    runtime: node
+    region: singapore
+    plan: starter
+    buildCommand: npm install --omit=dev
+    startCommand: npm start
+    healthCheckPath: /api/health
+    autoDeploy: false
+    disk:
+      name: mediguide-data
+      mountPath: /var/data
+      sizeGB: 1
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: DATA_DIR
+        value: /var/data
+      - key: DB_FILE
+        value: /var/data/mediguide.db
+      - key: JWT_SECRET
+        sync: false
+      - key: SERVER_SECRET
+        sync: false

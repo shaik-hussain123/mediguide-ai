@@ -1,7 +1,7 @@
 /** Auth: register/login, JWT access + rotating refresh cookie, TOTP 2FA, OAuth2 (authorization code + PKCE). */
 import crypto from 'node:crypto';
 import { config } from '../lib/config.js';
-import { get, run, now, audit } from '../lib/db.js';
+import { get, run, now, audit, getSetting } from '../lib/db.js';
 import { hashPassword, verifyPassword, signJwt, verifyJwt, randomToken, sha256, uuid, seal, open } from '../lib/security.js';
 import { HttpError, bad, cookie, parseCookies, rateLimit, str, EMAIL_RE } from '../lib/http.js';
 import { verifyTotp, generateSecret } from '../../js/utils/totp.js';
@@ -30,6 +30,12 @@ function issueSession(user) {
 
 const userById = (id) => get('SELECT * FROM users WHERE id = ?', id);
 const ip = (req) => req.socket.remoteAddress || 'ip';
+const oauthConfig = () => ({
+  ...config.oauth,
+  clientId: getSetting('oauth_client_id') ?? config.oauth.clientId,
+  clientSecret: getSetting('oauth_client_secret') ? open(getSetting('oauth_client_secret')) : config.oauth.clientSecret,
+  redirectUri: getSetting('oauth_redirect_uri') ?? config.oauth.redirectUri,
+});
 
 export const authRoutes = [
   ['POST', '/api/auth/register', async ({ req, body }) => {
@@ -106,10 +112,10 @@ export const authRoutes = [
   }, { auth: 'user' }],
 
   /* ---------- OAuth2 / OIDC authorization-code flow with PKCE ---------- */
-  ['GET', '/api/auth/oauth/status', () => ({ body: { enabled: Boolean(config.oauth.clientId && config.oauth.clientSecret) } })],
+  ['GET', '/api/auth/oauth/status', () => { const o = oauthConfig(); return { body: { enabled: Boolean(o.clientId && o.clientSecret) } }; }],
 
   ['GET', '/api/auth/oauth/start', () => {
-    const o = config.oauth;
+    const o = oauthConfig();
     if (!o.clientId || !o.clientSecret) throw new HttpError(501, 'Social sign-in is not configured on this server.');
     const state = randomToken(16);
     const verifier = randomToken(48);
@@ -120,7 +126,7 @@ export const authRoutes = [
   }],
 
   ['GET', '/api/auth/oauth/callback', async ({ req, query }) => {
-    const o = config.oauth;
+    const o = oauthConfig();
     const flow = verifyJwt(parseCookies(req).mg_oauth);
     const clear = cookie('mg_oauth', '', { maxAge: 0, path: '/api/auth/oauth', secure: config.production });
     if (!flow || !query.state || query.state !== flow.state || !query.code) throw new HttpError(400, 'Sign-in could not be verified. Please try again.');

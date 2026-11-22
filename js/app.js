@@ -14,12 +14,14 @@ import { initScanners } from './components/scanner.js';
 import { initAdmin } from './components/admin.js';
 import { initReminders } from './components/reminders.js';
 import { initAppointments } from './components/appointments.js';
+import { initHealthDashboard } from './components/healthDashboard.js';
 import { initClinicFinder, destroyClinicFinder } from './components/clinicFinder.js';
 import { initMedicationTracker } from './components/medicationTracker.js';
 import { speak, stopSpeaking, plainText } from './services/voice.js';
+import { renderClinicalFindings } from './components/clinicalFindings.js';
 
 const state = { query: '', category: '', company: '', selectedId: null, age: 'adult' };
-const PAGES = ['pageMedicine', 'pageScanner', 'pagePrescription', 'pageCare', 'pageReminders', 'pageClinic', 'pageTracker'];
+const PAGES = ['pageMedicine', 'pageScanner', 'pagePrescription', 'pageCare', 'pageReminders', 'pageClinic', 'pageTracker', 'pageHealth'];
 let search;
 
 async function refresh() {
@@ -31,9 +33,11 @@ async function refresh() {
   let assessment = null;
   if (med && backend.isOnline()) {
     try {
-      // Build a basic dosage request from the medicine's default dose/frequency
-      const doseMatch = (med.dose || '').match(/(\d+(?:\.\d+)?)\s*(mg|mcg|g|ml|units?)/i);
-      const dose = doseMatch ? parseFloat(doseMatch[1]) : (med.mg || 0);
+      // Prefer an explicitly stated mass; otherwise use the product's strength, not a tablet count.
+      const doseMatch = (med.dose || '').match(/(\d+(?:\.\d+)?)\s*(mg|mcg|g)\b/i);
+      const dose = doseMatch
+        ? Number(doseMatch[1]) * ({ mg: 1, mcg: 0.001, g: 1000 }[doseMatch[2].toLowerCase()])
+        : Number(med.mg);
       const freq = med.frequency || 'OD';
 
       // Try to get patient profile for more accurate assessment
@@ -48,11 +52,14 @@ async function refresh() {
         };
       }
 
-      const response = await backend.api('/api/safety/dosage-check', {
-        method: 'POST',
-        body: { med_id: med.id, dosage: dose, frequency: freq, patient }
-      });
-      assessment = response;
+      if (Number.isFinite(dose) && dose > 0) {
+        const response = await backend.api('/api/safety/dosage-check', {
+          method: 'POST',
+          body: { med_id: med.id, dosage: dose, frequency: freq, patient }
+        });
+        if (response.medication === med.name) assessment = response;
+        else console.warn(`Dosage assessment returned ${response.medication} for ${med.name}; ignoring mismatched result.`);
+      }
     } catch (e) {
       // Silently fail - charts will render without assessment
       console.debug('Could not fetch safety assessment for charts:', e);
@@ -60,6 +67,7 @@ async function refresh() {
   }
 
   $('#medDetail').innerHTML = renderResults(results, state.selectedId, state.query) + renderMedicine(med, state.age, assessment);
+  if (med && assessment) renderClinicalFindings('clinicalFindings', assessment);
   $('#globalStoreLinks').innerHTML = renderStoreLinks(med, state.query);
   $('#medicineCount').textContent = db.getAll().length;
   renderCompanies(state.company);
@@ -74,7 +82,10 @@ function activateTab(pageId) {
 function initTabs() {
   const tabs = $$('.page-tab');
   tabs.forEach((tab, i) => {
-    tab.addEventListener('click', () => activateTab(tab.dataset.page));
+    tab.addEventListener('click', () => {
+      activateTab(tab.dataset.page);
+      document.dispatchEvent(new CustomEvent('mg:goto-tab', { detail: tab.dataset.page }));
+    });
     tab.addEventListener('keydown', (e) => {                                  // arrow-key tab navigation (FR-10.4)
       const d = { ArrowRight: 1, ArrowLeft: -1 }[e.key]; if (!d) return;
       const next = tabs[(i + d + tabs.length) % tabs.length]; next.focus(); next.click();
@@ -131,6 +142,7 @@ async function boot() {
   initInstall();
   initReminders();
   initAppointments();
+  initHealthDashboard();
   initClinicFinder();
   initMedicationTracker();
 

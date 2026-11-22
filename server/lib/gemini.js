@@ -26,7 +26,7 @@ export async function generate({ system, history, parts }) {
       let res; let json = null;
       try {
         res = await fetch(`${config.geminiEndpoint}/${encodeURIComponent(model)}:generateContent`, {
-          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': key }, body, signal: AbortSignal.timeout(60000),
+          method: 'POST', headers: { 'Content-Type': 'application/json', 'x-goog-api-key': getKey() }, body, signal: AbortSignal.timeout(60000),
         });
         json = await res.json().catch(() => null);
       } catch { last = new HttpError(502, 'The AI service is not reachable. Please try again.'); if (attempt === 0) { await sleep(600); continue; } break; }

@@ -11,6 +11,7 @@ import { apiRoutes } from './routes/api.js';
 
 const routes = [...authRoutes, ...apiRoutes].map(([method, pattern, handler, opts = {}]) => {
   const keys = [];
+  // Match the pattern against the pathname (without query string), but also allow query params
   const re = new RegExp(`^${pattern.replace(/:([a-z]+)/gi, (_, k) => { keys.push(k); return '([^/]+)'; })}$`);
   return { method, re, keys, handler, opts };
 });
@@ -19,9 +20,9 @@ const SECURITY_HEADERS = {
   'X-Content-Type-Options': 'nosniff',
   'Referrer-Policy': 'no-referrer',
   'X-Frame-Options': 'DENY',
-  'Permissions-Policy': 'camera=(), geolocation=(), microphone=(self)',
+  'Permissions-Policy': 'camera=(), geolocation=(self), microphone=(self)',
   'Cross-Origin-Opener-Policy': 'same-origin',
-  'Content-Security-Policy': "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob:; media-src 'self' blob:; connect-src 'self' https://generativelanguage.googleapis.com; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'",
+  'Content-Security-Policy': "default-src 'self'; script-src 'self' https://unpkg.com; style-src 'self' 'unsafe-inline' https://cdnjs.cloudflare.com https://fonts.googleapis.com https://unpkg.com; font-src 'self' https://cdnjs.cloudflare.com https://fonts.gstatic.com; img-src 'self' data: blob: https://*.tile.openstreetmap.org; media-src 'self' blob:; connect-src 'self' https://generativelanguage.googleapis.com; base-uri 'self'; form-action 'self'; object-src 'none'; frame-ancestors 'none'",
   ...(config.production ? { 'Strict-Transport-Security': 'max-age=31536000; includeSubDomains' } : {}),
 };
 
@@ -49,6 +50,7 @@ async function authenticate(req, level) {
   if (level === 'optional') return user;
   if (!user) throw new HttpError(401, 'Please log in.');
   if (level === 'admin' && user.role !== 'admin') throw new HttpError(403, 'Admin access only.');
+  if (level === 'doctor' && user.role !== 'doctor') throw new HttpError(403, 'Doctor access only.');
   return user;
 }
 
